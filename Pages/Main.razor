@@ -1,0 +1,192 @@
+@page "/"
+@inject Astrodaiva.Blazor.Services.AstroDataService Data
+@using Astrodaiva.Data
+@using Astrodaiva.Data.Models
+@using System.Globalization
+@using System.Linq
+
+<h2>Astrodaiva</h2>
+
+<div class="card month-header">
+  <button class="nav-btn" @onclick="PrevMonth">◀</button>
+  <div class="month-title">@_current.ToString("MMMM yyyy", CultureInfo.InvariantCulture)</div>
+  <button class="nav-btn" @onclick="NextMonth">▶</button>
+</div>
+
+@if (_db is null)
+{
+    <div class="card">Loading astro database…</div>
+}
+else
+{
+    <div class="card">
+        
+<div class="tabs-strip">
+    @foreach (var day in Enumerable.Range(1, DateTime.DaysInMonth(_year, _month)))
+    {
+        var active = day == _selectedDay ? "active" : "";
+        
+            var e = _monthEvents.FirstOrDefault(x => x.Date.Day == day);
+            string? sunSlug = null; string? sunTitle = null;
+            if (e?.SunInZodiac is not null)
+            { var name = GetSignName((int)e.SunInZodiac.NewZodiacSign); sunSlug = ToSlug(name); sunTitle = $"Sun in {name}"; }
+            string? moonSlug = null; string? moonTitle = null;
+            if (e?.MoonInZodiac is not null)
+            { var name = GetSignName((int)e.MoonInZodiac.NewZodiacSign); moonSlug = ToSlug(name); moonTitle = $"Moon in {name}"; }
+       
+        <button class="tab-btn @active" @onclick="@(() => SelectDay(day))" title="@($"{_current:MMMM yyyy}")">
+            <span class="tab-icon tab-left">
+                @if (!string.IsNullOrEmpty(sunSlug))
+                { <img src="@($"img/zodiac/{sunSlug}.svg")" alt="@sunTitle" title="@sunTitle" width="20" height="20" /> }
+            </span>
+            <span class="tab-day">@day</span>
+            <span class="tab-icon tab-right">
+                @if (!string.IsNullOrEmpty(moonSlug))
+                { <img src="@($"img/zodiac/{moonSlug}.svg")" alt="@moonTitle" title="@moonTitle" width="20" height="20" /> }
+            </span>
+        </button>
+    }
+</div>
+        
+
+        <div class="tab-content">
+            <h3>@_current.ToString("yyyy-MM-dd")</h3>
+<div class="day-astro">
+  @if (DayEvents.Any())
+  {
+      var first = DayEvents.First(); 
+      <div class="astro-row">
+        <div class="astro-col">
+          <img alt="Sun" src="img/planets/sun.svg" width="40" height="40" />
+          @if (first.SunInZodiac is not null)
+          {
+              var signName = ToSlug(GetSignName((int)first.SunInZodiac.NewZodiacSign));
+              <div>Sun in @GetSignName((int)first.SunInZodiac.NewZodiacSign)</div>
+              <img alt="Sun sign" src="@($"img/zodiac/{signName}.svg")" width="48" height="48" />
+          }
+        </div>
+        <div class="astro-col">
+          <img alt="Moon" src="img/planets/moon.svg" width="40" height="40" />
+          @if (first.MoonInZodiac is not null)
+          {
+              var signName = ToSlug(GetSignName((int)first.MoonInZodiac.NewZodiacSign));
+              <div>Moon in @GetSignName((int)first.MoonInZodiac.NewZodiacSign)</div>
+              <img alt="Moon sign" src="@($"img/zodiac/{signName}.svg")" width="48" height="48" />
+          }
+        </div>
+      </div>
+  }
+</div>
+
+            @if (_monthEvents is null || _monthEvents.Count == 0)
+            {
+                <p>No events for this month.</p>
+            }
+            else
+            {
+                
+                @if (!DayEvents.Any())
+                {
+                    <p>No events on this day.</p>
+                }
+                else
+                {
+                    <ul>
+                        @foreach (var e in DayEvents)
+                        {
+                            if (!string.IsNullOrWhiteSpace(e.EventText))
+                            {
+                                <li>@e.EventText</li>
+                            }
+                            else if (e.PlanetEvents is not null && e.PlanetEvents.Count > 0)
+                            {
+                                <li>@string.Join(", ", e.PlanetEvents.Select(pe => $"{pe.Planet1} {pe.AspectSymbol} {pe.Planet2}"))</li>
+                            }
+                            else
+                            {
+                                <li>Event</li>
+                            }
+                        }
+                    </ul>
+                }
+            }
+        </div>
+    </div>
+}
+
+@code {
+    private IEnumerable<AstroEvent> DayEvents => _monthEvents.Where(e => e.Date.Day == _selectedDay).OrderBy(e => e.Date);
+
+    private static string GetSignName(int sign)
+    {
+        return sign switch
+        {
+            1 => "Aries",
+            2 => "Taurus",
+            3 => "Gemini",
+            4 => "Cancer",
+            5 => "Leo",
+            6 => "Virgo",
+            7 => "Libra",
+            8 => "Scorpio",
+            9 => "Sagittarius",
+            10 => "Capricorn",
+            11 => "Aquarius",
+            12 => "Pisces",
+            _ => "Unknown"
+        };
+    }
+    private static string ToSlug(string s) => s.ToLowerInvariant();
+
+    private AppDB? _db;
+    private List<AstroEvent> _monthEvents = new();
+    private DateTime _current = DateTime.Today;
+    private int _year;
+    private int _month;
+    private int _selectedDay;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _db = await Data.LoadAsync();
+        _year = _current.Year;
+        _month = _current.Month;
+        _selectedDay = _current.Day;
+        RecomputeMonthEvents();
+    }
+
+    private void RecomputeMonthEvents()
+    {
+        _monthEvents = _db?.AstroEventsDB?
+            .Where(x => x.Date.Year == _year && x.Date.Month == _month)
+            .OrderBy(x => x.Date)
+            .ToList() ?? new List<AstroEvent>();
+        var dim = DateTime.DaysInMonth(_year, _month);
+        if (_selectedDay < 1) _selectedDay = 1;
+        if (_selectedDay > dim) _selectedDay = dim;
+        _current = new DateTime(_year, _month, _selectedDay);
+    }
+
+    private void SelectDay(int day)
+    {
+        _selectedDay = day;
+        _current = new DateTime(_year, _month, _selectedDay);
+    }
+
+    private void PrevMonth()
+    {
+        var d = new DateTime(_year, _month, 1).AddMonths(-1);
+        _year = d.Year;
+        _month = d.Month;
+        _selectedDay = 1;
+        RecomputeMonthEvents();
+    }
+
+    private void NextMonth()
+    {
+        var d = new DateTime(_year, _month, 1).AddMonths(1);
+        _year = d.Year;
+        _month = d.Month;
+        _selectedDay = 1;
+        RecomputeMonthEvents();
+    }
+}
