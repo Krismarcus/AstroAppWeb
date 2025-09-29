@@ -1,0 +1,79 @@
+:root {
+  --ShadedBackground: #F8FCD1;
+  --Primary: #074252;
+  --PrimaryDark: #ac99ea;
+  --PrimaryLightText: #F8FCD1;
+  --PrimaryDarkText: #074252;
+  --PrimaryBackground: #074252;
+  --SecondaryBackground: #48A6B1;
+  --LightOrangeBackground: #f0c986;
+  --LightBlueBackground: #c3e9f8;
+  --GreyBackground: #919191;
+  --DarkBlueBackground: #08385a;
+  --Secondary: #3682b5;
+  --SecondaryDarkText: #9880e5;
+  --Tertiary: #2B0B98;
+  --GreenGlowEffect: #04c8c7;
+  --RedGlowEffect: #babcbb;
+  --White: White;
+  --Black: Black;
+  --Magenta: #D600AA;
+  --MidnightBlue: #190649;
+  --OffBlack: #1f1f1f;
+  --Gray100: #E1E1E1;
+  --Gray200: #C8C8C8;
+  --Gray300: #ACACAC;
+  --Gray400: #919191;
+  --Gray500: #6E6E6E;
+  --Gray600: #404040;
+  --Gray900: #212121;
+  --Gray950: #141414;
+  --AriesColor: #FF0000;
+  --TaurusColor: #008000;
+  --GeminiColor: #FFFF00;
+  --CancerColor: #C0C0C0;
+  --LeoColor: #FFA500;
+  --VirgoColor: #800080;
+  --LibraColor: #FFC0CB;
+  --ScorpioColor: #800000;
+  --SagittariusColor: #0000FF;
+  --CapricornColor: #808080;
+  --AquariusColor: #00FFFF;
+  --PiscesColor: #000080;
+}
+
+html, body {
+    height: 100%;
+    margin: 0;
+    background: var(--ShadedBackground);
+    color: var(--PrimaryDarkText);
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif;
+}
+a { color: var(--Secondary); }
+.header { padding: 1rem; text-align: center; }
+.container { max-width: 2000px; margin: 0 auto; padding: 1rem; }
+.card { background: white; border-radius: 14px; box-shadow: 0 10px 30px rgba(0,0,0,.08); padding: 1rem; }
+.tag { display:inline-block; padding:.2rem .6rem; border-radius: 999px; background: var(--LightBlueBackground); }
+.grid { display: grid; gap: 1rem; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+
+
+/* Tabs */
+.month-header{ display:flex; align-items:center; justify-content:center; gap:.75rem; }
+.month-title{ font-weight:700; }
+.nav-btn{ border:none; background:var(--LightBlueBackground); padding:.4rem .6rem; border-radius:10px; cursor:pointer; }
+.tabs-strip{ display:flex; gap:.4rem; overflow-x:auto; padding:.4rem 0; scroll-snap-type:x mandatory; }
+.tab-btn{ scroll-snap-align:start; border:none; padding:.4rem .6rem; border-radius:10px; cursor:pointer; background:var(--Gray100); }
+.tab-btn.active{ background:var(--Secondary); color:white; }
+.tab-content{ margin-top:.5rem; }
+
+
+.day-astro{ margin:.5rem 0 1rem; }
+.astro-row{ display:flex; gap:1rem; align-items:center; }
+.astro-col{ display:flex; align-items:center; gap:.5rem; }
+
+
+/* Day tabs with Sun/Moon icons */
+.tab-btn { display:inline-flex; align-items:center; gap:.4rem; }
+.tab-icon { width:20px; height:20px; display:inline-flex; align-items:center; justify-content:center; }
+.tab-day { min-width:1.4rem; text-align:center; font-weight:600; }
+.tab-btn img { display:block; }
