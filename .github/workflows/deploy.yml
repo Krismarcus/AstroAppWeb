@@ -1,0 +1,36 @@
+name: Deploy Blazor WASM to GitHub Pages
+on:
+  push:
+    branches: [ master ]   # or main, match your default branch
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+
+      - name: Publish
+        # If your .csproj isn't at repo root, set the path accordingly
+        run: dotnet publish -c Release -o dist
+
+      # Set base href so the SPA works under /AstroAppWeb/ on GitHub Pages
+      - name: Fix base href for Pages
+        run: sed -i 's|<base href="/" />|<base href="/AstroAppWeb/" />|' dist/wwwroot/index.html
+
+      # SPA fallback so deep links work
+      - name: Add 404 fallback
+        run: cp dist/wwwroot/index.html dist/wwwroot/404.html
+
+      - name: Deploy to gh-pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          publish_dir: dist/wwwroot
+          publish_branch: gh-pages
