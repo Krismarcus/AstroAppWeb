@@ -1,7 +1,7 @@
 name: Deploy Blazor WASM to GitHub Pages
 on:
   push:
-    branches: [ master ]           # or main if that's your default
+    branches: [ master ]     # change to main if your default branch is main
   workflow_dispatch:
 
 permissions:
@@ -27,14 +27,16 @@ jobs:
       - name: Publish Blazor
         run: dotnet publish Astrodaiva.Blazor.csproj -c Release -o dist
 
-      # Set <base href="/AstroAppWeb/"> dynamically from the repo name
-      - name: Configure base href and SPA fallback
+      # IMPORTANT: GitHub Pages serves under /<repo>/
+      # Make sure base href matches your repo (AstroAppWeb) and add SPA fallback
+      - name: Set base href and add 404 fallback
         run: |
-          echo "REPO_NAME=${GITHUB_REPOSITORY##*/}" >> $GITHUB_ENV
-          sed -i "s|<base href=\"/\" />|<base href=\"/${REPO_NAME}/\" />|" dist/wwwroot/index.html
+          REPO="${GITHUB_REPOSITORY##*/}"
+          sed -i "s|<base href=\"/\" />|<base href=\"/${REPO}/\" />|" dist/wwwroot/index.html || true
+          sed -i "s|<base href=\"/\">|<base href=\"/${REPO}/\">|" dist/wwwroot/index.html || true
           cp dist/wwwroot/index.html dist/wwwroot/404.html
 
-      - name: Upload artifact for GitHub Pages
+      - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:
           path: dist/wwwroot
