@@ -1,9 +1,313 @@
 @page "/year"
+@inject Astrodaiva.Blazor.Services.AstroDataService Data
+@using Astrodaiva.Data.Enums
+@using Astrodaiva.Data.Models
+@using System.Globalization
+
+<div class="year-switcher">
+    <button class="year-arrow" @onclick="PrevYear">&#8592;</button>
+    <span class="year-label">@_year</span>
+    <button class="year-arrow" @onclick="NextYear">&#8594;</button>
+</div>
 <h2>Year Overview</h2>
 <div class="card">
-  <p>Placeholder for the YearPage content.</p>
-  <MonthLine Year="DateTime.Now.Year" />
+    @if (_db is null)
+    {
+        <div>Loading astro database…</div>
+    }
+    else
+    {
+        <div class="month-bar">
+            @foreach (var month in Enumerable.Range(1, 12))
+            {
+                var days = DateTime.DaysInMonth(_year, month);
+                <span class="month-label" style="width:@(days * 100.0 / 365)%">
+                    @CultureInfo.CurrentCulture.DateTimeFormat.GetAbbreviatedMonthName(month)
+                </span>
+            }
+        </div>
+        <div class="year-bar">
+            @foreach (var segment in _yearSegments)
+            {
+                <span class="zodiac-bar" style="background:@GetZodiacColor(segment.ZodiacSign);width:@(segment.Length * 100.0 / 365)%"
+                      title="@($"{GetSignName((int)segment.ZodiacSign)}: {segment.Start:MMM d} - {segment.End:MMM d}")">
+                    @GetSignName((int)segment.ZodiacSign)
+                </span>
+            }
+        </div>
+
+        @foreach (var planet in new[] { "Mercury", "Venus", "Mars", "Jupiter", "Saturn", "Uranus", "Neptune", "Pluto" })
+        {
+            <div class="year-bar">
+                @foreach (var segment in BuildPlanetSegments(planet))
+                {
+                    <span class="zodiac-bar" style="background:@GetZodiacColor(segment.ZodiacSign);width:@(segment.Length * 100.0 / 365)%"
+                          title="@($"{planet}: {GetSignName((int)segment.ZodiacSign)} {segment.Start:MMM d} - {segment.End:MMM d}")">
+                        @GetSignName((int)segment.ZodiacSign)
+                    </span>
+                }
+            </div>
+        }
+    }
 </div>
 
 @code {
+    private AppDB? _db;
+    private int _year = DateTime.Now.Year;
+    private List<ZodiacSegment> _yearSegments = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _db = await Data.LoadAsync();
+        BuildYearSegments();
+    }
+
+    private void PrevYear()
+    {
+        _year--;
+        BuildYearSegments();
+        StateHasChanged();
+    }
+
+    private void NextYear()
+    {
+        _year++;
+        BuildYearSegments();
+        StateHasChanged();
+    }
+
+    private void BuildYearSegments()
+    {
+        var events = _db?.AstroEventsDB?
+            .Where(x => x.Date.Year == _year)
+            .OrderBy(x => x.Date)
+            .ToList();
+
+        if (events is null || events.Count == 0)
+        {
+            _yearSegments.Clear();
+            return;
+        }
+
+        _yearSegments.Clear();
+
+        ZodiacSign? currentSign = null;
+        DateTime? start = null;
+        foreach (var e in events)
+        {
+            var sunSign = e.SunInZodiac?.NewZodiacSign;
+            if (sunSign is null)
+                continue;
+
+            if (currentSign == null)
+            {
+                currentSign = sunSign;
+                start = e.Date;
+            }
+            else if (currentSign != sunSign)
+            {
+                _yearSegments.Add(new ZodiacSegment
+                {
+                    ZodiacSign = currentSign.Value,
+                    Start = start!.Value,
+                    End = e.Date.AddDays(-1),
+                    Length = (e.Date - start.Value).Days
+                });
+                currentSign = sunSign;
+                start = e.Date;
+            }
+        }
+        // Add last segment
+        if (currentSign != null && start != null)
+        {
+            var lastDay = new DateTime(_year, 12, 31);
+            _yearSegments.Add(new ZodiacSegment
+            {
+                ZodiacSign = currentSign.Value,
+                Start = start.Value,
+                End = lastDay,
+                Length = (lastDay - start.Value).Days + 1
+            });
+        }
+    }
+
+    private List<ZodiacSegment> BuildPlanetSegments(string planetName)
+    {
+        var events = _db?.AstroEventsDB?
+            .Where(x => x.Date.Year == _year)
+            .OrderBy(x => x.Date)
+            .ToList();
+
+        if (events is null || events.Count == 0)
+            return new List<ZodiacSegment>();
+
+        var segments = new List<ZodiacSegment>();
+        ZodiacSign? currentSign = null;
+        DateTime? start = null;
+
+        foreach (var e in events)
+        {
+            ZodiacSign? sign = planetName switch
+            {
+                "Mercury" => e.MercuryInZodiac?.NewZodiacSign,
+                "Venus" => e.VenusInZodiac?.NewZodiacSign,
+                "Mars" => e.MarsInZodiac?.NewZodiacSign,
+                "Jupiter" => e.JupiterInZodiac?.NewZodiacSign,
+                "Saturn" => e.SaturnInZodiac?.NewZodiacSign,
+                "Uranus" => e.UranusInZodiac?.NewZodiacSign,
+                "Neptune" => e.NeptuneInZodiac?.NewZodiacSign,
+                "Pluto" => e.PlutoInZodiac?.NewZodiacSign,
+                _ => null
+            };
+
+            if (sign is null)
+                continue;
+
+            if (currentSign == null)
+            {
+                currentSign = sign;
+                start = e.Date;
+            }
+            else if (currentSign != sign)
+            {
+                segments.Add(new ZodiacSegment
+                {
+                    ZodiacSign = currentSign.Value,
+                    Start = start!.Value,
+                    End = e.Date.AddDays(-1),
+                    Length = (e.Date - start.Value).Days
+                });
+                currentSign = sign;
+                start = e.Date;
+            }
+        }
+        // Add last segment
+        if (currentSign != null && start != null)
+        {
+            var lastDay = new DateTime(_year, 12, 31);
+            segments.Add(new ZodiacSegment
+            {
+                ZodiacSign = currentSign.Value,
+                Start = start.Value,
+                End = lastDay,
+                Length = (lastDay - start.Value).Days + 1
+            });
+        }
+        return segments;
+    }
+
+    private string GetSignName(int sign) => sign switch
+    {
+        1 => "Aries",
+        2 => "Taurus",
+        3 => "Gemini",
+        4 => "Cancer",
+        5 => "Leo",
+        6 => "Virgo",
+        7 => "Libra",
+        8 => "Scorpio",
+        9 => "Sagittarius",
+        10 => "Capricorn",
+        11 => "Aquarius",
+        12 => "Pisces",
+        _ => "Unknown"
+    };
+
+    private string GetZodiacColor(ZodiacSign sign) => sign switch
+    {
+        ZodiacSign.Aries => "#FFB347",
+        ZodiacSign.Taurus => "#77DD77",
+        ZodiacSign.Gemini => "#AEC6CF",
+        ZodiacSign.Cancer => "#CFCFC4",
+        ZodiacSign.Leo => "#FFD700",
+        ZodiacSign.Virgo => "#B2BEB5",
+        ZodiacSign.Libra => "#FFB7B2",
+        ZodiacSign.Scorpio => "#C23B22",
+        ZodiacSign.Sagittarius => "#F49AC2",
+        ZodiacSign.Capricorn => "#A9A9A9",
+        ZodiacSign.Aquarius => "#779ECB",
+        ZodiacSign.Pisces => "#B39EB5",
+        _ => "#CCCCCC"
+    };
+
+    public class ZodiacSegment
+    {
+        public ZodiacSign ZodiacSign { get; set; }
+        public DateTime Start { get; set; }
+        public DateTime End { get; set; }
+        public int Length { get; set; }
+    }
 }
+
+<style>
+    .month-bar {
+        display: flex;
+        height: 24px;
+        margin-bottom: 4px;
+        border-radius: 8px 8px 0 0;
+        overflow: hidden;
+        background: #f8f8f8;
+        box-shadow: 0 1px 2px #0001;
+    }
+    .month-label {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.95em;
+        color: #444;
+        font-weight: 500;
+        border-right: 1px solid #eee;
+        background: #f8f8f8;
+        white-space: nowrap;
+    }
+    .month-label:last-child {
+        border-right: none;
+    }
+    .year-bar {
+        display: flex;
+        height: 32px;
+        margin-bottom: 1em;
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: 0 1px 4px #0002;
+    }
+    .zodiac-bar {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #222;
+        font-size: 0.9em;
+        font-weight: 500;
+        white-space: nowrap;
+        border-right: 1px solid #fff3;
+        transition: background 0.2s;
+    }
+    .zodiac-bar:last-child {
+        border-right: none;
+    }
+    .year-switcher {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        margin-bottom: 1em;
+        gap: 1em;
+    }
+    .year-label {
+        font-size: 1.5em;
+        font-weight: bold;
+        margin: 0 1em;
+        vertical-align: middle;
+    }
+    .year-arrow {
+        background: none;
+        border: none;
+        font-size: 1.5em;
+        cursor: pointer;
+        color: #666;
+        padding: 0 0.5em;
+        vertical-align: middle;
+    }
+    .year-arrow:focus {
+        outline: none;
+    }
+</style>
