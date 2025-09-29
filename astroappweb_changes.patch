@@ -1,0 +1,410 @@
+diff --git a/App.razor b/App.razor
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/App.razor
+@@ -0,0 +1,14 @@
++@using Microsoft.AspNetCore.Components.Routing
++@using Astrodaiva.Blazor.Shared
++
++<Router AppAssembly="@typeof(App).Assembly" PreferExactMatches="@true">
++    <Found Context="routeData">
++        <RouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)" />
++        <FocusOnNavigate RouteData="@routeData" Selector="h1" />
++    </Found>
++    <NotFound>
++        <LayoutView Layout="@typeof(MainLayout)">
++            <p>Sorry, there's nothing at this address.</p>
++        </LayoutView>
++    </NotFound>
++</Router>
+diff --git a/Pages/Main.razor b/Pages/Main.razor
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/Pages/Main.razor
+@@ -0,0 +1,192 @@
++@page "/"
++@using Astrodaiva.Data
++@using Astrodaiva.Data.Models
++@using System.Globalization
++@using System.Linq
++@inject Astrodaiva.Blazor.Services.AstroDataService Data
++
++<h2>Astrodaiva</h2>
++
++<div class="card month-header">
++  <button class="nav-btn" @onclick="PrevMonth">◀</button>
++  <div class="month-title">@_current.ToString("MMMM yyyy", CultureInfo.InvariantCulture)</div>
++  <button class="nav-btn" @onclick="NextMonth">▶</button>
++</div>
++
++@if (_db is null)
++{
++    <div class="card">Loading astro database…</div>
++}
++else
++{
++    <div class="card">
++        <div class="tabs-strip">
++            @foreach (var day in Enumerable.Range(1, DateTime.DaysInMonth(_year, _month)))
++            {
++                var active = day == _selectedDay ? "active" : "";
++
++                @{
++                    var e = _monthEvents.FirstOrDefault(x => x.Date.Day == day);
++
++                    string? sunSlug = null; string? sunTitle = null;
++                    if (e?.SunInZodiac is not null)
++                    {
++                        var name = GetSignName((int)e.SunInZodiac.NewZodiacSign);
++                        sunSlug = ToSlug(name);
++                        sunTitle = $"Sun in {name}";
++                    }
++
++                    string? moonSlug = null; string? moonTitle = null;
++                    if (e?.MoonInZodiac is not null)
++                    {
++                        var name = GetSignName((int)e.MoonInZodiac.NewZodiacSign);
++                        moonSlug = ToSlug(name);
++                        moonTitle = $"Moon in {name}";
++                    }
++                }
++
++                <button class="tab-btn @active" @onclick="@(() => SelectDay(day))" title="@($"{_current:MMMM yyyy}")">
++                    <span class="tab-icon tab-left">
++                        @if (!string.IsNullOrEmpty(sunSlug))
++                        { <img src="@($"img/zodiac/{sunSlug}.svg")" alt="@sunTitle" title="@sunTitle" width="20" height="20" /> }
++                    </span>
++                    <span class="tab-day">@day</span>
++                    <span class="tab-icon tab-right">
++                        @if (!string.IsNullOrEmpty(moonSlug))
++                        { <img src="@($"img/zodiac/{moonSlug}.svg")" alt="@moonTitle" title="@moonTitle" width="20" height="20" /> }
++                    </span>
++                </button>
++            }
++        </div>
++
++        <div class="tab-content">
++            <h3>@_current.ToString("yyyy-MM-dd")</h3>
++
++            <div class="day-astro">
++              @{
++                  var first = DayEvents.FirstOrDefault();
++              }
++              @if (first is not null)
++              {
++                  <div class="astro-row">
++                    <div class="astro-col">
++                      <img alt="Sun" src="img/planets/sun.svg" width="40" height="40" />
++                      @if (first.SunInZodiac is not null)
++                      {
++                          var name = GetSignName((int)first.SunInZodiac.NewZodiacSign);
++                          <div>Sun in @name</div>
++                          <img alt="Sun sign" src="@($"img/zodiac/{ToSlug(name)}.svg")" width="48" height="48" />
++                      }
++                    </div>
++                    <div class="astro-col">
++                      <img alt="Moon" src="img/planets/moon.svg" width="40" height="40" />
++                      @if (first.MoonInZodiac is not null)
++                      {
++                          var name = GetSignName((int)first.MoonInZodiac.NewZodiacSign);
++                          <div>Moon in @name</div>
++                          <img alt="Moon sign" src="@($"img/zodiac/{ToSlug(name)}.svg")" width="48" height="48" />
++                      }
++                    </div>
++                  </div>
++              }
++            </div>
++
++            @if (!DayEvents.Any())
++            {
++                <p>No events on this day.</p>
++            }
++            else
++            {
++                <ul>
++                    @foreach (var e in DayEvents)
++                    {
++                        if (!string.IsNullOrWhiteSpace(e.EventText))
++                        {
++                            <li>@e.EventText</li>
++                        }
++                        else if (e.PlanetEvents is not null && e.PlanetEvents.Count > 0)
++                        {
++                            <li>@string.Join(", ", e.PlanetEvents.Select(pe => $"{pe.Planet1} {pe.AspectSymbol} {pe.Planet2}"))</li>
++                        }
++                        else { <li>Event</li> }
++                    }
++                </ul>
++            }
++        </div>
++    </div>
++}
++
++@code {
++    private AppDB? _db;
++    private List<AstroEvent> _monthEvents = new();
++    private DateTime _current = DateTime.Today;
++    private int _year;
++    private int _month;
++    private int _selectedDay;
++
++    private IEnumerable<AstroEvent> DayEvents => _monthEvents.Where(e => e.Date.Day == _selectedDay).OrderBy(e => e.Date);
++
++    protected override async Task OnInitializedAsync()
++    {
++        _db = await Data.LoadAsync();
++        _year = _current.Year;
++        _month = _current.Month;
++        _selectedDay = _current.Day;
++        RecomputeMonthEvents();
++    }
++
++    private void RecomputeMonthEvents()
++    {
++        _monthEvents = _db?.AstroEventsDB?
++            .Where(x => x.Date.Year == _year && x.Date.Month == _month)
++            .OrderBy(x => x.Date)
++            .ToList() ?? new List<AstroEvent>();
++
++        var dim = DateTime.DaysInMonth(_year, _month);
++        if (_selectedDay < 1) _selectedDay = 1;
++        if (_selectedDay > dim) _selectedDay = dim;
++        _current = new DateTime(_year, _month, _selectedDay);
++    }
++
++    private void SelectDay(int day)
++    {
++        _selectedDay = day;
++        _current = new DateTime(_year, _month, _selectedDay);
++    }
++
++    private void PrevMonth()
++    {
++        var d = new DateTime(_year, _month, 1).AddMonths(-1);
++        _year = d.Year;
++        _month = d.Month;
++        _selectedDay = 1;
++        RecomputeMonthEvents();
++    }
++
++    private void NextMonth()
++    {
++        var d = new DateTime(_year, _month, 1).AddMonths(1);
++        _year = d.Year;
++        _month = d.Month;
++        _selectedDay = 1;
++        RecomputeMonthEvents();
++    }
++
++    private static string GetSignName(int sign) => sign switch
++    {
++        1 => "Aries",
++        2 => "Taurus",
++        3 => "Gemini",
++        4 => "Cancer",
++        5 => "Leo",
++        6 => "Virgo",
++        7 => "Libra",
++        8 => "Scorpio",
++        9 => "Sagittarius",
++        10 => "Capricorn",
++        11 => "Aquarius",
++        12 => "Pisces",
++        _ => "Unknown"
++    };
++    private static string ToSlug(string s) => s.ToLowerInvariant();
++}
+diff --git a/Services/AstroDataService.cs b/Services/AstroDataService.cs
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/Services/AstroDataService.cs
+@@ -0,0 +1,17 @@
++using System.Net.Http.Json;
++using Astrodaiva.Data;
++using Astrodaiva.Data.Models;
++
++namespace Astrodaiva.Blazor.Services;
++
++public class AstroDataService
++{
++    private readonly HttpClient _http;
++    public AstroDataService(HttpClient http) => _http = http;
++
++    public async Task<AppDB?> LoadAsync(string path = "data/astrodb.json")
++    {
++        try { return await _http.GetFromJsonAsync<AppDB>(path); }
++        catch { return null; }
++    }
++}
+diff --git a/wwwroot/css/app.append.css b/wwwroot/css/app.append.css
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/wwwroot/css/app.append.css
+@@ -0,0 +1,9 @@
++
++/* --- Day tabs with Sun/Moon icons --- */
++.tab-btn { display:inline-flex; align-items:center; gap:.4rem; }
++.tab-icon { width:20px; height:20px; display:inline-flex; align-items:center; justify-content:center; }
++.tab-day { min-width:1.4rem; text-align:center; font-weight:600; }
++.tab-btn img { display:block; }
++.day-astro{ margin:.5rem 0 1rem; }
++.astro-row{ display:flex; gap:1rem; align-items:center; }
++.astro-col{ display:flex; align-items:center; gap:.5rem; }
+diff --git a/wwwroot/img/planets/sun.svg b/wwwroot/img/planets/sun.svg
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/wwwroot/img/planets/sun.svg
+@@ -0,0 +1,5 @@
++<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
++<rect x="8" y="8" rx="24" ry="24" width="112" height="112" fill="#ffffff" stroke="#333333"/>
++<text x="64" y="72" text-anchor="middle" font-size="56">☉</text>
++<text x="64" y="110" text-anchor="middle" font-size="16" fill="#444">Sun</text>
++</svg>
+diff --git a/wwwroot/img/planets/moon.svg b/wwwroot/img/planets/moon.svg
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/wwwroot/img/planets/moon.svg
+@@ -0,0 +1,5 @@
++<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
++<rect x="8" y="8" rx="24" ry="24" width="112" height="112" fill="#ffffff" stroke="#333333"/>
++<text x="64" y="72" text-anchor="middle" font-size="56">☽</text>
++<text x="64" y="110" text-anchor="middle" font-size="16" fill="#444">Moon</text>
++</svg>
+diff --git a/wwwroot/img/zodiac/aries.svg b/wwwroot/img/zodiac/aries.svg
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/wwwroot/img/zodiac/aries.svg
+@@ -0,0 +1,5 @@
++<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
++<rect x="8" y="8" rx="24" ry="24" width="112" height="112" fill="#ffffff" stroke="#333333"/>
++<text x="64" y="72" text-anchor="middle" font-size="56">♈</text>
++<text x="64" y="110" text-anchor="middle" font-size="16" fill="#444">Aries</text>
++</svg>
+diff --git a/wwwroot/img/zodiac/taurus.svg b/wwwroot/img/zodiac/taurus.svg
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/wwwroot/img/zodiac/taurus.svg
+@@ -0,0 +1,5 @@
++<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
++<rect x="8" y="8" rx="24" ry="24" width="112" height="112" fill="#ffffff" stroke="#333333"/>
++<text x="64" y="72" text-anchor="middle" font-size="56">♉</text>
++<text x="64" y="110" text-anchor="middle" font-size="16" fill="#444">Taurus</text>
++</svg>
+diff --git a/wwwroot/img/zodiac/gemini.svg b/wwwroot/img/zodiac/gemini.svg
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/wwwroot/img/zodiac/gemini.svg
+@@ -0,0 +1,5 @@
++<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
++<rect x="8" y="8" rx="24" ry="24" width="112" height="112" fill="#ffffff" stroke="#333333"/>
++<text x="64" y="72" text-anchor="middle" font-size="56">♊</text>
++<text x="64" y="110" text-anchor="middle" font-size="16" fill="#444">Gemini</text>
++</svg>
+diff --git a/wwwroot/img/zodiac/cancer.svg b/wwwroot/img/zodiac/cancer.svg
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/wwwroot/img/zodiac/cancer.svg
+@@ -0,0 +1,5 @@
++<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
++<rect x="8" y="8" rx="24" ry="24" width="112" height="112" fill="#ffffff" stroke="#333333"/>
++<text x="64" y="72" text-anchor="middle" font-size="56">♋</text>
++<text x="64" y="110" text-anchor="middle" font-size="16" fill="#444">Cancer</text>
++</svg>
+diff --git a/wwwroot/img/zodiac/leo.svg b/wwwroot/img/zodiac/leo.svg
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/wwwroot/img/zodiac/leo.svg
+@@ -0,0 +1,5 @@
++<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
++<rect x="8" y="8" rx="24" ry="24" width="112" height="112" fill="#ffffff" stroke="#333333"/>
++<text x="64" y="72" text-anchor="middle" font-size="56">♌</text>
++<text x="64" y="110" text-anchor="middle" font-size="16" fill="#444">Leo</text>
++</svg>
+diff --git a/wwwroot/img/zodiac/virgo.svg b/wwwroot/img/zodiac/virgo.svg
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/wwwroot/img/zodiac/virgo.svg
+@@ -0,0 +1,5 @@
++<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
++<rect x="8" y="8" rx="24" ry="24" width="112" height="112" fill="#ffffff" stroke="#333333"/>
++<text x="64" y="72" text-anchor="middle" font-size="56">♍</text>
++<text x="64" y="110" text-anchor="middle" font-size="16" fill="#444">Virgo</text>
++</svg>
+diff --git a/wwwroot/img/zodiac/libra.svg b/wwwroot/img/zodiac/libra.svg
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/wwwroot/img/zodiac/libra.svg
+@@ -0,0 +1,5 @@
++<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
++<rect x="8" y="8" rx="24" ry="24" width="112" height="112" fill="#ffffff" stroke="#333333"/>
++<text x="64" y="72" text-anchor="middle" font-size="56">♎</text>
++<text x="64" y="110" text-anchor="middle" font-size="16" fill="#444">Libra</text>
++</svg>
+diff --git a/wwwroot/img/zodiac/scorpio.svg b/wwwroot/img/zodiac/scorpio.svg
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/wwwroot/img/zodiac/scorpio.svg
+@@ -0,0 +1,5 @@
++<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
++<rect x="8" y="8" rx="24" ry="24" width="112" height="112" fill="#ffffff" stroke="#333333"/>
++<text x="64" y="72" text-anchor="middle" font-size="56">♏</text>
++<text x="64" y="110" text-anchor="middle" font-size="16" fill="#444">Scorpio</text>
++</svg>
+diff --git a/wwwroot/img/zodiac/sagittarius.svg b/wwwroot/img/zodiac/sagittarius.svg
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/wwwroot/img/zodiac/sagittarius.svg
+@@ -0,0 +1,5 @@
++<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
++<rect x="8" y="8" rx="24" ry="24" width="112" height="112" fill="#ffffff" stroke="#333333"/>
++<text x="64" y="72" text-anchor="middle" font-size="56">♐</text>
++<text x="64" y="110" text-anchor="middle" font-size="16" fill="#444">Sagittarius</text>
++</svg>
+diff --git a/wwwroot/img/zodiac/capricorn.svg b/wwwroot/img/zodiac/capricorn.svg
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/wwwroot/img/zodiac/capricorn.svg
+@@ -0,0 +1,5 @@
++<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
++<rect x="8" y="8" rx="24" ry="24" width="112" height="112" fill="#ffffff" stroke="#333333"/>
++<text x="64" y="72" text-anchor="middle" font-size="56">♑</text>
++<text x="64" y="110" text-anchor="middle" font-size="16" fill="#444">Capricorn</text>
++</svg>
+diff --git a/wwwroot/img/zodiac/aquarius.svg b/wwwroot/img/zodiac/aquarius.svg
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/wwwroot/img/zodiac/aquarius.svg
+@@ -0,0 +1,5 @@
++<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
++<rect x="8" y="8" rx="24" ry="24" width="112" height="112" fill="#ffffff" stroke="#333333"/>
++<text x="64" y="72" text-anchor="middle" font-size="56">♒</text>
++<text x="64" y="110" text-anchor="middle" font-size="16" fill="#444">Aquarius</text>
++</svg>
+diff --git a/wwwroot/img/zodiac/pisces.svg b/wwwroot/img/zodiac/pisces.svg
+new file mode 100644
+index 0000000..1111111
+--- /dev/null
++++ b/wwwroot/img/zodiac/pisces.svg
+@@ -0,0 +1,5 @@
++<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="0 0 128 128">
++<rect x="8" y="8" rx="24" ry="24" width="112" height="112" fill="#ffffff" stroke="#333333"/>
++<text x="64" y="72" text-anchor="middle" font-size="56">♓</text>
++<text x="64" y="110" text-anchor="middle" font-size="16" fill="#444">Pisces</text>
++</svg>
