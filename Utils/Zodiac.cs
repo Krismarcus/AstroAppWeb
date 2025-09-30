@@ -41,18 +41,18 @@ namespace Astrodaiva.Blazor.Utils
 
         public static string Color(ZodiacSign sign) => sign switch
         {
-            ZodiacSign.Aries => "#FFB347",
-            ZodiacSign.Taurus => "#77DD77",
-            ZodiacSign.Gemini => "#AEC6CF",
-            ZodiacSign.Cancer => "#CFCFC4",
-            ZodiacSign.Leo => "#FFD700",
-            ZodiacSign.Virgo => "#B2BEB5",
-            ZodiacSign.Libra => "#FFB7B2",
-            ZodiacSign.Scorpio => "#C23B22",
-            ZodiacSign.Sagittarius => "#F49AC2",
-            ZodiacSign.Capricorn => "#A9A9A9",
-            ZodiacSign.Aquarius => "#779ECB",
-            ZodiacSign.Pisces => "#B39EB5",
+            ZodiacSign.Aries => "#C22936",
+            ZodiacSign.Taurus => "#C68813",
+            ZodiacSign.Gemini => "#8F9131",
+            ZodiacSign.Cancer => "#347288",
+            ZodiacSign.Leo => "#C22936",
+            ZodiacSign.Virgo => "#C68813",
+            ZodiacSign.Libra => "#8F9131",
+            ZodiacSign.Scorpio => "#347288",
+            ZodiacSign.Sagittarius => "#C22936",
+            ZodiacSign.Capricorn => "#C68813",
+            ZodiacSign.Aquarius => "#8F9131",
+            ZodiacSign.Pisces => "#347288",
             _ => "#CCCCCC"
         };
     }
