@@ -3,7 +3,6 @@
 @using Astrodaiva.Data.Enums
 @using Astrodaiva.Data.Models
 @using System.Globalization
-@using Astrodaiva.Blazor.Utils
 
 <div class="year-switcher">
     <button class="year-arrow" @onclick="PrevYear">&#8592;</button>
@@ -44,17 +43,14 @@
                             @foreach (var segment in planetRow.Segments)
                             {
                                 <span class="zodiac-bar @(IsSegmentSelected(planetRow.PlanetName, segment) ? "selected" : "")"
-                                      style="background:@Zodiac.Color(segment.ZodiacSign);width:@(segment.WidthPercentage)%"
-                                      title="@($"{planetRow.PlanetName}: {Zodiac.Name((int)segment.ZodiacSign)} {segment.ZodiacStartDate:MMM d} - {segment.ZodiacEndDate:MMM d}")"
+                                      style="background:@GetZodiacColor(segment.ZodiacSign);width:@(segment.WidthPercentage)%"
+                                      title="@($"{planetRow.PlanetName}: {GetSignName((int)segment.ZodiacSign)} {segment.ZodiacStartDate:MMM d} - {segment.ZodiacEndDate:MMM d}")"
                                       @onclick="() => SelectSegment(planetRow.PlanetName, segment)"
                                       @onmouseover="() => OnSegmentHover(segment)"
                                       @onmouseout="OnSegmentHoverOut">
                                     <span class="bar-content">
-                                        @if (!(segment.ZodiacStartDate.Month == 1 && segment.ZodiacStartDate.Day == 1))
-                                        {
-                                            <span class="start-day">@segment.ZodiacStartDate.Day</span>
-                                        }
-                                        <img class="zodiac-symbol" src="@Zodiac.ImagePath(segment.ZodiacSign)" alt="@Zodiac.Name((int)segment.ZodiacSign)" />
+                                        <span class="start-day">@segment.ZodiacStartDate.Day</span>
+                                        <img class="zodiac-symbol" src="@GetZodiacImage(segment.ZodiacSign)" alt="@GetSignName((int)segment.ZodiacSign)" />
                                     </span>
                                 </span>
                             }
@@ -67,7 +63,6 @@
                                 <span class="retrograde-bar"
                                       style="width:@(retroSegment.WidthPercentage)%; left:@(retroSegment.LeftPosition)%"
                                       title="@($"{planetRow.PlanetName} Retrograde: {retroSegment.StartDate:MMM d} - {retroSegment.EndDate:MMM d}")">
-                                    <span class="retro-start-day">@retroSegment.StartDate.Day</span>
                                 </span>
                             }
                         </div>
@@ -155,7 +150,7 @@
         var infoSourceItem = _db?.PlanetInZodiacsDB?.FirstOrDefault(p =>
             p.Planet == planet && p.ZodiacSign == segment.ZodiacSign);
 
-        _selectedPlanetInZodiacText = $"{planetName} in {Zodiac.Name((int)segment.ZodiacSign)}";
+        _selectedPlanetInZodiacText = $"{planetName} in {GetSignName((int)segment.ZodiacSign)}";
         _selectedStartDateText = $"From {segment.ZodiacStartDate:MMMM d, HH:mm}";
         _selectedEndDateText = $"To {segment.ZodiacEndDate:MMMM d, HH:mm}";
         _selectedPlanetInfo = infoSourceItem?.PlanetInZodiacInfo ?? "No information available.";
@@ -269,7 +264,28 @@
             "Pluto" => astroEvent.PlutoInZodiac?.IsRetrograde,
             _ => null
         };
-    }    
+    }
+
+    private string GetZodiacImage(ZodiacSign sign)
+    {
+        var imageName = sign switch
+        {
+            ZodiacSign.Aries => "aries_blue.png",
+            ZodiacSign.Taurus => "taurus_blue.png",
+            ZodiacSign.Gemini => "gemini_blue.png",
+            ZodiacSign.Cancer => "cancer_blue.png",
+            ZodiacSign.Leo => "leo_blue.png",
+            ZodiacSign.Virgo => "virgo_blue.png",
+            ZodiacSign.Libra => "libra_blue.png",
+            ZodiacSign.Scorpio => "scorpio_blue.png",
+            ZodiacSign.Sagittarius => "sagittarius_blue.png",
+            ZodiacSign.Capricorn => "capricorn_blue.png",
+            ZodiacSign.Aquarius => "aquarius_blue.png",
+            ZodiacSign.Pisces => "pisces_blue.png",
+            _ => "unknown.png"
+        };        
+        return $"img/zodiac/{imageName}";
+    }
 
     private void HideEventDetails()
     {
@@ -455,6 +471,40 @@
         };
     }
 
+    private string GetSignName(int sign) => sign switch
+    {
+        1 => "Aries",
+        2 => "Taurus",
+        3 => "Gemini",
+        4 => "Cancer",
+        5 => "Leo",
+        6 => "Virgo",
+        7 => "Libra",
+        8 => "Scorpio",
+        9 => "Sagittarius",
+        10 => "Capricorn",
+        11 => "Aquarius",
+        12 => "Pisces",
+        _ => "Unknown"
+    };
+
+    private string GetZodiacColor(ZodiacSign sign) => sign switch
+    {
+        ZodiacSign.Aries => "#FFB347",
+        ZodiacSign.Taurus => "#77DD77",
+        ZodiacSign.Gemini => "#AEC6CF",
+        ZodiacSign.Cancer => "#CFCFC4",
+        ZodiacSign.Leo => "#FFD700",
+        ZodiacSign.Virgo => "#B2BEB5",
+        ZodiacSign.Libra => "#FFB7B2",
+        ZodiacSign.Scorpio => "#C23B22",
+        ZodiacSign.Sagittarius => "#F49AC2",
+        ZodiacSign.Capricorn => "#A9A9A9",
+        ZodiacSign.Aquarius => "#779ECB",
+        ZodiacSign.Pisces => "#B39EB5",
+        _ => "#CCCCCC"
+    };
+
     // Helper classes
     public class PlanetRow
     {
@@ -572,9 +622,8 @@
 
     .retrograde-bar-container {
         position: relative;
-        height: 4px; /* same thin height as before */
+        height: 4px;
         margin-top: 2px;
-        overflow: visible; /* allow hover growth to overflow */
     }
 
     .retrograde-bar {
@@ -582,35 +631,8 @@
         height: 100%;
         background: linear-gradient(45deg, #ff6b6b, #ee5a24);
         border-radius: 2px;
-        opacity: 0.85;
-        transform-origin: center;
-        transform: translateY(0) scaleY(1); /* thin by default */
-        transition: transform 120ms ease, filter 120ms ease, box-shadow 120ms ease;
+        opacity: 0.8;
     }
-
-        .retrograde-bar:hover {
-            transform: translateY(-6px) scaleY(4); /* ~16px visual thickness */
-            filter: brightness(1.1);
-            box-shadow: 0 2px 10px rgba(0,0,0,0.25);
-        }
-
-    .retro-start-day {
-        position: absolute;
-        left: 6px;
-        top: 50%;
-        transform: translateY(-50%);
-        font-size: 5px;
-        font-weight: 700;
-        color: #fff;
-        text-shadow: 0 1px 2px rgba(0,0,0,0.6);
-        letter-spacing: 2px;
-        pointer-events: none; /* don’t block hover */
-        opacity: 0;        
-    }
-
-    .retrograde-bar:hover .retro-start-day {
-        opacity: 1;
-    }    
 
     .zodiac-bar {
         display: flex;
