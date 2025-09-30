@@ -21,70 +21,72 @@
     else
     {
         <div class="timeline-container">
-            <!-- Month labels -->
-            <div class="month-labels-container">
-                <div class="planet-label-spacer"></div>
-                <div class="month-bar">
-                    @foreach (var month in _monthSegments)
-                    {
-                        <span class="month-label @(IsMonthHighlighted(month) ? "highlighted" : "")"
-                              style="width:@(month.WidthPercentage)%">
-                            @CultureInfo.CurrentCulture.DateTimeFormat.GetAbbreviatedMonthName(month.MonthStartDate.Month)
-                        </span>
-                    }
-                </div>
-            </div>
-
-            <!-- Planet Rows -->
-            @foreach (var planetRow in _planetRows)
-            {
-                <div class="planet-row">
-                    <div class="planet-label">@planetRow.PlanetName</div>
-
-                    <div class="planet-bar-container">
-                        <!-- Main Zodiac Bar -->
-                        <div class="year-bar">
-                            @foreach (var segment in planetRow.Segments)
-                            {
-                                <span class="zodiac-bar @(IsSegmentSelected(planetRow.PlanetName, segment) ? "selected" : "")"
-                                      style="background:@Zodiac.Color(segment.ZodiacSign);width:@(segment.WidthPercentage)%"
-                                      title="@($"{planetRow.PlanetName}: {Zodiac.Name((int)segment.ZodiacSign)} {segment.ZodiacStartDate:MMM d} - {segment.ZodiacEndDate:MMM d}")"
-                                      @onclick="() => SelectSegment(planetRow.PlanetName, segment)"
-                                      @onmouseover="() => OnSegmentHover(segment)"
-                                      @onmouseout="OnSegmentHoverOut">
-
-                                    <span class="bar-content">
-                                        @if (!(segment.ZodiacStartDate.Month == 1 && segment.ZodiacStartDate.Day == 1))
-                                        {
-                                            <span class="start-day">@segment.ZodiacStartDate.Day</span>
-                                        }
-                                        <img class="zodiac-symbol"
-                                             src="@Zodiac.ImagePath(segment.ZodiacSign)"
-                                             alt="@Zodiac.Name((int)segment.ZodiacSign)" />
-                                    </span>
-                                </span>
-                            }
-                        </div>
-
-                        <!-- Retrograde Bar -->
-                        <div class="retrograde-bar-container">
-                            @foreach (var retroSegment in GetRetrogradeSegments(planetRow.PlanetName))
-                            {
-                                var key = MakeRetroKey(planetRow.PlanetName, retroSegment.StartDate);
-                                <span class="retrograde-bar @(key == _activeRetroKey ? "is-active" : null)"
-                                      style="width:@(retroSegment.WidthPercentage)%; left:@(retroSegment.LeftPosition)%"
-                                      title="@($"{planetRow.PlanetName} Retrograde: {retroSegment.StartDate:MMM d} - {retroSegment.EndDate:MMM d}")"
-                                      @onpointerdown="@(() => _activeRetroKey = key)"
-                                      @onpointerup="@(() => StateHasChanged())"
-                                      @onpointercancel="@(() => _activeRetroKey = null)"
-                                      @onpointerleave="@(() => _activeRetroKey = null)">
-                                    <span class="retro-start-day">@retroSegment.StartDate.Day</span>
-                                </span>
-                            }
-                        </div>
+            <div class="timeline-content">
+                <!-- Month labels -->
+                <div class="month-labels-container">
+                    <div class="planet-label-spacer"></div>
+                    <div class="month-bar">
+                        @foreach (var month in _monthSegments)
+                        {
+                            <span class="month-label @(IsMonthHighlighted(month) ? "highlighted" : "")"
+                                  style="width:@(month.WidthPercentage)%">
+                                @CultureInfo.CurrentCulture.DateTimeFormat.GetAbbreviatedMonthName(month.MonthStartDate.Month)
+                            </span>
+                        }
                     </div>
                 </div>
-            }
+
+                <!-- Planet Rows -->
+                @foreach (var planetRow in _planetRows)
+                {
+                    <div class="planet-row">
+                        <div class="planet-label">@planetRow.PlanetName</div>
+
+                        <div class="planet-bar-container">
+                            <!-- Main Zodiac Bar -->
+                            <div class="year-bar">
+                                @foreach (var segment in planetRow.Segments)
+                                {
+                                    <span class="zodiac-bar @(IsSegmentSelected(planetRow.PlanetName, segment) ? "selected" : "")"
+                                          style="background:@Zodiac.Color(segment.ZodiacSign);width:@(segment.WidthPercentage)%"
+                                          title="@($"{planetRow.PlanetName}: {Zodiac.Name((int)segment.ZodiacSign)} {segment.ZodiacStartDate:MMM d} - {segment.ZodiacEndDate:MMM d}")"
+                                          @onclick="() => SelectSegment(planetRow.PlanetName, segment)"
+                                          @onmouseover="() => OnSegmentHover(segment)"
+                                          @onmouseout="OnSegmentHoverOut">
+
+                                        <span class="bar-content">
+                                            @if (!(segment.ZodiacStartDate.Month == 1 && segment.ZodiacStartDate.Day == 1))
+                                            {
+                                                <span class="start-day">@segment.ZodiacStartDate.Day</span>
+                                            }
+                                            <img class="zodiac-symbol"
+                                                 src="@Zodiac.ImagePath(segment.ZodiacSign)"
+                                                 alt="@Zodiac.Name((int)segment.ZodiacSign)" />
+                                        </span>
+                                    </span>
+                                }
+                            </div>
+
+                            <!-- Retrograde Bar -->
+                            <div class="retrograde-bar-container">
+                                @foreach (var retroSegment in GetRetrogradeSegments(planetRow.PlanetName))
+                                {
+                                    var key = MakeRetroKey(planetRow.PlanetName, retroSegment.StartDate);
+                                    <span class="retrograde-bar @(key == _activeRetroKey ? "is-active" : null)"
+                                          style="width:@(retroSegment.WidthPercentage)%; left:@(retroSegment.LeftPosition)%"
+                                          title="@($"{planetRow.PlanetName} Retrograde: {retroSegment.StartDate:MMM d} - {retroSegment.EndDate:MMM d}")"
+                                          @onpointerdown="@(() => _activeRetroKey = key)"
+                                          @onpointerup="@(() => StateHasChanged())"
+                                          @onpointercancel="@(() => _activeRetroKey = null)"
+                                          @onpointerleave="@(() => _activeRetroKey = null)">
+                                        <span class="retro-start-day">@retroSegment.StartDate.Day</span>
+                                    </span>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                }
+            </div>
         </div>
 
         <!-- Event Details Panel -->
@@ -127,7 +129,7 @@
     // Hover
     private ZodiacSegment? _hoveredSegment;
 
-    // Touch “active” retrograde key (planet + start date)
+    // Touch "active" retrograde key (planet + start date)
     private string? _activeRetroKey;
     private static string MakeRetroKey(string planetName, DateTime start)
         => $"{planetName}:{start:yyyyMMdd}";
@@ -492,6 +494,10 @@
         -webkit-overflow-scrolling: touch;
     }
 
+    .timeline-content {
+        min-width: 1440px; /* MOBILE: doubled from 720px to 1440px */
+    }
+
     .month-labels-container {
         display: flex;
         align-items: center;
@@ -501,6 +507,7 @@
     .planet-label-spacer {
         width: 80px;
         margin-right: 1em;
+        flex-shrink: 0;
     }
 
     .month-bar {
@@ -511,7 +518,7 @@
         overflow: hidden;
         background: #f8f8f8;
         box-shadow: 0 1px 2px #0001;
-        min-width: 1440px; /* MOBILE: doubled from 720px to 1440px */
+        min-width: 1360px; /* 1440px - 80px (spacer width) */
     }
 
     .month-label {
@@ -559,12 +566,12 @@
         display: flex;
         flex-direction: column;
         position: relative;
-        min-width: 1440px; /* MOBILE: doubled from 720px to 1440px */
+        min-width: 1360px; /* 1440px - 80px (label width) */
     }
 
     .year-bar {
         display: flex;
-        height: 32px; /* KEPT ORIGINAL HEIGHT */
+        height: 32px;
         border-radius: 8px;
         overflow: hidden;
         box-shadow: 0 1px 4px #0002;
@@ -573,7 +580,7 @@
     /* Retrograde line: thin by default */
     .retrograde-bar-container {
         position: relative;
-        height: 4px; /* KEPT ORIGINAL HEIGHT */
+        height: 4px;
         margin-top: 2px;
         overflow: visible; /* allow hover growth to overflow */
     }
@@ -636,7 +643,7 @@
         align-items: center;
         justify-content: center;
         color: #222;
-        font-size: 0.9em; /* KEPT ORIGINAL SIZE */
+        font-size: 0.9em;
         font-weight: 500;
         white-space: nowrap;
         border-right: 1px solid #fff3;
@@ -652,23 +659,23 @@
         align-items: center;
         width: 100%;
         height: 100%;
-        padding: 0 8px; /* KEPT ORIGINAL PADDING */
+        padding: 0 8px;
         position: relative;
     }
 
     .start-day {
-        font-size: 0.95em; /* KEPT ORIGINAL SIZE */
+        font-size: 0.95em;
         font-weight: 500;
         color: #444;
         white-space: nowrap;
         position: absolute;
-        left: 8px; /* KEPT ORIGINAL POSITION */
+        left: 8px;
         z-index: 2;
     }
 
     .zodiac-symbol {
-        height: 20px; /* KEPT ORIGINAL SIZE */
-        width: 20px; /* KEPT ORIGINAL SIZE */
+        height: 20px;
+        width: 20px;
         object-fit: contain;
         margin: 0 auto;
     }
@@ -801,11 +808,16 @@
         }
 
         .month-bar {
-            height: 22px; /* KEPT ORIGINAL HEIGHT */
+            height: 22px;
+            min-width: 1384px; /* 1440px - 56px */
+        }
+
+        .planet-bar-container {
+            min-width: 1384px; /* 1440px - 56px */
         }
 
         .year-bar {
-            height: 28px; /* KEPT ORIGINAL HEIGHT */
+            height: 28px;
         }
     }
 
@@ -815,18 +827,26 @@
             font-size: .8rem;
         }
 
+        .month-bar {
+            min-width: 1360px; /* 1440px - 80px */
+        }
+
+        .planet-bar-container {
+            min-width: 1360px; /* 1440px - 80px */
+        }
+
         .bar-content {
-            padding: 0 6px; /* KEPT ORIGINAL PADDING */
+            padding: 0 6px;
         }
 
         .start-day {
-            left: 6px; /* KEPT ORIGINAL POSITION */
-            font-size: .85rem; /* KEPT ORIGINAL SIZE */
+            left: 6px;
+            font-size: .85rem;
         }
 
         .zodiac-symbol {
-            height: 16px; /* KEPT ORIGINAL SIZE */
-            width: 16px; /* KEPT ORIGINAL SIZE */
+            height: 16px;
+            width: 16px;
         }
 
         .month-label {
