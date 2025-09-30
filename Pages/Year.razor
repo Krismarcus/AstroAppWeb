@@ -37,18 +37,32 @@
             {
                 <div class="planet-row">
                     <div class="planet-label">@planetRow.PlanetName</div>
-                    <div class="year-bar">
-                        @foreach (var segment in planetRow.Segments)
-                        {
-                            <span class="zodiac-bar @(IsSegmentSelected(planetRow.PlanetName, segment) ? "selected" : "")"
-                                  style="background:@GetZodiacColor(segment.ZodiacSign);width:@(segment.WidthPercentage)%"
-                                  title="@($"{planetRow.PlanetName}: {GetSignName((int)segment.ZodiacSign)} {segment.ZodiacStartDate:MMM d} - {segment.ZodiacEndDate:MMM d}")"
-                                  @onclick="() => SelectSegment(planetRow.PlanetName, segment)"
-                                  @onmouseover="() => OnSegmentHover(segment)"
-                                  @onmouseout="OnSegmentHoverOut">
-                                @GetSignName((int)segment.ZodiacSign)
-                            </span>
-                        }
+                    <div class="planet-bar-container">
+                        <!-- Main Zodiac Bar -->
+                        <div class="year-bar">
+                            @foreach (var segment in planetRow.Segments)
+                            {
+                                <span class="zodiac-bar @(IsSegmentSelected(planetRow.PlanetName, segment) ? "selected" : "")"
+                                      style="background:@GetZodiacColor(segment.ZodiacSign);width:@(segment.WidthPercentage)%"
+                                      title="@($"{planetRow.PlanetName}: {GetSignName((int)segment.ZodiacSign)} {segment.ZodiacStartDate:MMM d} - {segment.ZodiacEndDate:MMM d}")"
+                                      @onclick="() => SelectSegment(planetRow.PlanetName, segment)"
+                                      @onmouseover="() => OnSegmentHover(segment)"
+                                      @onmouseout="OnSegmentHoverOut">
+                                    @GetSignName((int)segment.ZodiacSign)
+                                </span>
+                            }
+                        </div>
+
+                        <!-- Retrograde Bar -->
+                        <div class="retrograde-bar-container">
+                            @foreach (var retroSegment in GetRetrogradeSegments(planetRow.PlanetName))
+                            {
+                                <span class="retrograde-bar"
+                                      style="width:@(retroSegment.WidthPercentage)%; left:@(retroSegment.LeftPosition)%"
+                                      title="@($"{planetRow.PlanetName} Retrograde: {retroSegment.StartDate:MMM d} - {retroSegment.EndDate:MMM d}")">
+                                </span>
+                            }
+                        </div>
                     </div>
                 </div>
             }
@@ -163,6 +177,90 @@
         // Check if the hovered segment overlaps with this month
         return _hoveredSegment.ZodiacStartDate <= month.MonthEndDate &&
                _hoveredSegment.ZodiacEndDate >= month.MonthStartDate;
+    }
+
+    private List<RetrogradeSegment> GetRetrogradeSegments(string planetName)
+    {
+        var segments = new List<RetrogradeSegment>();
+        var activeAstroEvents = _db?.AstroEventsDB?
+            .Where(e => e.Date.Year == _year && e.Date.Month >= 1 && e.Date.Month <= 12)
+            .OrderBy(e => e.Date)
+            .ToList();
+
+        if (activeAstroEvents == null || !activeAstroEvents.Any())
+            return segments;
+
+        bool? lastRetrogradeState = null;
+        DateTime? startDate = null;
+
+        foreach (var astroEvent in activeAstroEvents)
+        {
+            bool? currentRetrogradeState = GetPlanetRetrogradeState(astroEvent, planetName);
+
+            if (currentRetrogradeState == null)
+                continue;
+
+            if (lastRetrogradeState == null || currentRetrogradeState != lastRetrogradeState)
+            {
+                if (startDate != null && lastRetrogradeState == true)
+                {
+                    var segment = CreateRetrogradeSegment(startDate.Value, astroEvent.Date.AddDays(-1));
+                    segments.Add(segment);
+                }
+
+                if (currentRetrogradeState == true)
+                {
+                    startDate = astroEvent.Date;
+                }
+                lastRetrogradeState = currentRetrogradeState;
+            }
+        }
+
+        // Add the last segment if retrograde
+        if (startDate != null && lastRetrogradeState == true)
+        {
+            var lastEvent = activeAstroEvents.Last();
+            var segment = CreateRetrogradeSegment(startDate.Value, lastEvent.Date);
+            segments.Add(segment);
+        }
+
+        return segments;
+    }
+
+    private RetrogradeSegment CreateRetrogradeSegment(DateTime startDate, DateTime endDate)
+    {
+        var startOfYear = new DateTime(_year, 1, 1);
+        var endOfYear = new DateTime(_year, 12, 31);
+
+        var daysFromStart = (startDate - startOfYear).Days;
+        var duration = (endDate - startDate).Days + 1;
+
+        var leftPosition = (daysFromStart * 100.0) / 365;
+        var widthPercentage = (duration * 100.0) / 365;
+
+        return new RetrogradeSegment
+        {
+            StartDate = startDate,
+            EndDate = endDate,
+            WidthPercentage = widthPercentage,
+            LeftPosition = leftPosition
+        };
+    }
+
+    private bool? GetPlanetRetrogradeState(AstroEvent astroEvent, string planetName)
+    {
+        return planetName switch
+        {
+            "Mercury" => astroEvent.MercuryInZodiac?.IsRetrograde,
+            "Venus" => astroEvent.VenusInZodiac?.IsRetrograde,
+            "Mars" => astroEvent.MarsInZodiac?.IsRetrograde,
+            "Jupiter" => astroEvent.JupiterInZodiac?.IsRetrograde,
+            "Saturn" => astroEvent.SaturnInZodiac?.IsRetrograde,
+            "Uranus" => astroEvent.UranusInZodiac?.IsRetrograde,
+            "Neptune" => astroEvent.NeptuneInZodiac?.IsRetrograde,
+            "Pluto" => astroEvent.PlutoInZodiac?.IsRetrograde,
+            _ => null
+        };
     }
 
     private void HideEventDetails()
@@ -405,6 +503,14 @@
         public int Duration { get; set; }
         public double WidthPercentage { get; set; }
     }
+
+    public class RetrogradeSegment
+    {
+        public DateTime StartDate { get; set; }
+        public DateTime EndDate { get; set; }
+        public double WidthPercentage { get; set; }
+        public double LeftPosition { get; set; }
+    }
 }
 
 <style>
@@ -463,7 +569,7 @@
     .planet-row {
         display: flex;
         align-items: center;
-        margin-bottom: 0.5em;
+        margin-bottom: 0.75em;
     }
 
     .planet-label {
@@ -475,13 +581,33 @@
         flex-shrink: 0;
     }
 
+    .planet-bar-container {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        position: relative;
+    }
+
     .year-bar {
         display: flex;
         height: 32px;
-        flex: 1;
         border-radius: 8px;
         overflow: hidden;
         box-shadow: 0 1px 4px #0002;
+    }
+
+    .retrograde-bar-container {
+        position: relative;
+        height: 4px;
+        margin-top: 2px;
+    }
+
+    .retrograde-bar {
+        position: absolute;
+        height: 100%;
+        background: linear-gradient(45deg, #ff6b6b, #ee5a24);
+        border-radius: 2px;
+        opacity: 0.8;
     }
 
     .zodiac-bar {
