@@ -25,23 +25,22 @@ else
         var active = day == _selectedDay ? "active" : "";
         
             var e = _monthEvents.FirstOrDefault(x => x.Date.Day == day);
-            string? sunSlug = null; string? sunTitle = null;
-            if (e?.SunInZodiac is not null)
-            { var name = GetSignName((int)e.SunInZodiac.NewZodiacSign); sunSlug = ToSlug(name); sunTitle = $"Sun in {name}"; }
-            string? moonSlug = null; string? moonTitle = null;
-            if (e?.MoonInZodiac is not null)
-            { var name = GetSignName((int)e.MoonInZodiac.NewZodiacSign); moonSlug = ToSlug(name); moonTitle = $"Moon in {name}"; }
+                string? sunSlug = null; 
+                string? sunTitle = null;
+                string? moonSlug = null;
+                string? moonTitle = null;
+                string? moonDayslug = null; 
+                string? moonDayTitle = null;
+
+            if (e?.MoonDay is not null)
+            { var name = GetMoonDayName((int)e.MoonDay.NewMoonDay); moonDayslug = ToSlug(name); moonDayTitle = $"Moonday is {name}"; }           
        
-        <button class="tab-btn @active" @onclick="@(() => SelectDay(day))" title="@($"{_current:MMMM yyyy}")">
-            <span class="tab-icon tab-left">
-                @if (!string.IsNullOrEmpty(sunSlug))
-                { <img src="@($"img/zodiac/{sunSlug}.svg")" alt="@sunTitle" title="@sunTitle" width="20" height="20" /> }
-            </span>
-            <span class="tab-day">@day</span>
-            <span class="tab-icon tab-right">
-                @if (!string.IsNullOrEmpty(moonSlug))
-                { <img src="@($"img/zodiac/{moonSlug}.svg")" alt="@moonTitle" title="@moonTitle" width="20" height="20" /> }
-            </span>
+        <button class="daycard @active" @onclick="@(() => SelectDay(day))" title="@($"{_current:MMMM yyyy}")">
+            <span class="daycard-day">@day</span>  
+                    <span class="daycard-icon tab-left">
+                @if (!string.IsNullOrEmpty(moonDayslug))
+                { <img src="@($"img/zodiac/{moonDayslug}.png")" alt="@moonDayTitle" title="@moonDayTitle" width="20" height="20" /> }
+            </span>                      
         </button>
     }
 </div>
@@ -55,21 +54,30 @@ else
       var first = DayEvents.First(); 
       <div class="astro-row">
         <div class="astro-col">
-          <img alt="Sun" src="img/planets/sun.svg" width="40" height="40" />
+          <img alt="Sun" src="img/zodiac/sun.png" width="40" height="40" />
+          @if (first.MoonDay is not null)
+          {
+              var symbolName = ToSlug(GetMoonDayName((int)first.MoonDay.NewMoonDay));
+              <div>Sun in @GetSignName((int)first.SunInZodiac.NewZodiacSign)</div>
+              <img alt="Sun sign" src="@($"img/zodiac/{symbolName}.png")" width="48" height="48" />
+          }
+        </div>
+        <div class="astro-col">
+          <img alt="Moon" src="img/planets/moon.png" width="40" height="40" />
           @if (first.SunInZodiac is not null)
           {
               var signName = ToSlug(GetSignName((int)first.SunInZodiac.NewZodiacSign));
               <div>Sun in @GetSignName((int)first.SunInZodiac.NewZodiacSign)</div>
-              <img alt="Sun sign" src="@($"img/zodiac/{signName}.svg")" width="48" height="48" />
+              <img alt="Sun sign" src="@($"img/zodiac/{signName}.png")" width="48" height="48" />
           }
         </div>
         <div class="astro-col">
-          <img alt="Moon" src="img/planets/moon.svg" width="40" height="40" />
+          <img alt="Moon" src="img/planets/moon.png" width="40" height="40" />
           @if (first.MoonInZodiac is not null)
           {
               var signName = ToSlug(GetSignName((int)first.MoonInZodiac.NewZodiacSign));
               <div>Moon in @GetSignName((int)first.MoonInZodiac.NewZodiacSign)</div>
-              <img alt="Moon sign" src="@($"img/zodiac/{signName}.svg")" width="48" height="48" />
+              <img alt="Moon sign" src="@($"img/zodiac/{signName}.png")" width="48" height="48" />
           }
         </div>
       </div>
@@ -134,6 +142,46 @@ else
             _ => "Unknown"
         };
     }
+
+    private static string GetMoonDayName(int symbol)
+    {
+        return symbol switch
+        {
+            1 => "Lantern",
+            2 => "Whale",
+            3 => "Leopard",
+            4 => "Tree",
+            5 => "Unicorn",
+            6 => "Rainbow",
+            7 => "Rooster",
+            8 => "Phoenix",
+            9 => "Bat",
+            10 => "Fountain",
+            11 => "Crown",
+            12 => "Bowl",
+            13 => "Wheel",
+            14 => "Trumpet",
+            15 => "Snake",
+            16 => "Dove",
+            17 => "Grapes",
+            18 => "Monkey",
+            19 => "Spider",
+            20 => "Eagle",
+            21 => "Horse",
+            22 => "Elephant",
+            23 => "Crocodile",
+            24 => "Bear",
+            25 => "Tortoise",
+            26 => "Toad",
+            27 => "Ship",
+            28 => "Lotus",
+            29 => "Octopus",
+            30 => "Swan",
+            _ => "Unknown"
+        };
+    }
+
+
     private static string ToSlug(string s) => s.ToLowerInvariant();
 
     private AppDB? _db;
@@ -186,5 +234,5 @@ else
         _month = d.Month;
         _selectedDay = 1;
         RecomputeMonthEvents();
-    }
+    }   
 }

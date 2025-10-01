@@ -11,8 +11,6 @@
     <button class="year-arrow" @onclick="NextYear">&#8594;</button>
 </div>
 
-<h2>Year Overview</h2>
-
 <div class="card" @onclick="() => _activeRetroKey = null">
     @if (_db is null)
     {
@@ -49,7 +47,7 @@
                                 {
                                     <span class="zodiac-bar @(IsSegmentSelected(planetRow.PlanetName, segment) ? "selected" : "")"
                                           style="background:@Zodiac.Color(segment.ZodiacSign);width:@(segment.WidthPercentage)%"
-                                          title="@($"{planetRow.PlanetName}: {Zodiac.Name((int)segment.ZodiacSign)} {segment.ZodiacStartDate:MMM d} - {segment.ZodiacEndDate:MMM d}")"
+                                          title="@($"{planetRow.PlanetName}: {Zodiac.Name(segment.ZodiacSign)} {segment.ZodiacStartDate:MMM d} - {segment.ZodiacEndDate:MMM d}")"
                                           @onclick="() => SelectSegment(planetRow.PlanetName, segment)"
                                           @onmouseover="() => OnSegmentHover(segment)"
                                           @onmouseout="OnSegmentHoverOut">
@@ -61,7 +59,7 @@
                                             }
                                             <img class="zodiac-symbol"
                                                  src="@Zodiac.ImagePath(segment.ZodiacSign)"
-                                                 alt="@Zodiac.Name((int)segment.ZodiacSign)" />
+                                                 alt="@Zodiac.Name(segment.ZodiacSign)" />
                                         </span>
                                     </span>
                                 }
@@ -173,7 +171,7 @@
         var infoSourceItem = _db?.PlanetInZodiacsDB?.FirstOrDefault(p =>
             p.Planet == planet && p.ZodiacSign == segment.ZodiacSign);
 
-        _selectedPlanetInZodiacText = $"{planetName} in {Zodiac.Name((int)segment.ZodiacSign)}";
+        _selectedPlanetInZodiacText = $"{planetName} in {Zodiac.Name(segment.ZodiacSign)}";
         _selectedStartDateText = $"From {segment.ZodiacStartDate:MMMM d, HH:mm}";
         _selectedEndDateText = $"To {segment.ZodiacEndDate:MMMM d, HH:mm}";
         _selectedPlanetInfo = infoSourceItem?.PlanetInZodiacInfo ?? "No information available.";
@@ -228,8 +226,8 @@
             {
                 if (startDate != null && lastRetrogradeState == true)
                 {
-                    var segment = CreateRetrogradeSegment(startDate.Value, astroEvent.Date.AddDays(-1));
-                    segments.Add(segment);
+                    var seg = CreateRetrogradeSegment(startDate.Value, astroEvent.Date.AddDays(-1));
+                    segments.Add(seg);
                 }
 
                 if (currentRetrogradeState == true)
@@ -243,8 +241,8 @@
         if (startDate != null && lastRetrogradeState == true)
         {
             var lastEvent = activeAstroEvents.Last();
-            var segment = CreateRetrogradeSegment(startDate.Value, lastEvent.Date);
-            segments.Add(segment);
+            var seg = CreateRetrogradeSegment(startDate.Value, lastEvent.Date);
+            segments.Add(seg);
         }
 
         return segments;
@@ -402,8 +400,8 @@
             {
                 if (startDate != null && lastSign != null)
                 {
-                    var segment = CreateZodiacSegment(lastSign.Value, startDate.Value, astroEvent.Date.AddDays(-1));
-                    segments.Add(segment);
+                    var seg = CreateZodiacSegment(lastSign.Value, startDate.Value, astroEvent.Date.AddDays(-1));
+                    segments.Add(seg);
                 }
                 startDate = astroEvent.Date;
                 lastSign = currentSign;
@@ -413,8 +411,8 @@
         if (startDate != null && lastSign != null)
         {
             var lastEvent = events.Last();
-            var segment = CreateZodiacSegment(lastSign.Value, startDate.Value, lastEvent.Date);
-            segments.Add(segment);
+            var seg = CreateZodiacSegment(lastSign.Value, startDate.Value, lastEvent.Date);
+            segments.Add(seg);
         }
 
         return segments;

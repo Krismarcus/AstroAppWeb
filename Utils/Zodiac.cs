@@ -8,6 +8,16 @@ namespace Astrodaiva.Blazor.Utils
         private static readonly string[] Symbols = { "♈","♉","♊","♋","♌","♍","♎","♏","♐","♑","♒","♓" };
         private static readonly string[] Names = { "Aries","Taurus","Gemini","Cancer","Leo","Virgo","Libra","Scorpio","Sagittarius","Capricorn","Aquarius","Pisces" };
 
+        private static int ToIndex(ZodiacSign sign)
+        {
+            var raw = (int)sign;
+            var idx = (raw >= 1 && raw <= 12) ? raw - 1 : raw; // supports 1-based or 0-based enums
+            return ((idx % 12) + 12) % 12;
+        }
+
+        public static string Symbol(ZodiacSign sign) => Symbols[ToIndex(sign)];
+        public static string Name(ZodiacSign sign) => Names[ToIndex(sign)];
+
         public static string Symbol(int signIndex)
         {
             int i = ((signIndex % 12) + 12) % 12;
@@ -16,7 +26,7 @@ namespace Astrodaiva.Blazor.Utils
 
         public static string Name(int signIndex)
         {
-            int i = ((signIndex % 12) + 12) % 12;
+            int i = (((signIndex % 12) + 12) % 12);
             return Names[i];
         }
 
