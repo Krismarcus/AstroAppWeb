@@ -40,6 +40,7 @@
     --CapricornColor: #808080;
     --AquariusColor: #00FFFF;
     --PiscesColor: #000080;
+    --MoondayIconSize: 128px;
 }
 
 html, body {
@@ -61,95 +62,149 @@ a { color: var(--Secondary); }
 .month-header{ display:flex; align-items:center; justify-content:center; gap:.75rem; }
 .month-title{ font-weight:700; }
 .nav-btn{ border:none; background:var(--LightBlueBackground); padding:.4rem .6rem; border-radius:10px; cursor:pointer; }
-.tabs-strip {
-    display: flex;
-    gap: .4rem;
-    overflow-x: auto;
-    padding: .4rem 0;
-    scroll-snap-type: x mandatory;
+/* --- Layout split --- */
+
+.day-layout {
+    justify-items: center; /* horizontal centering for grid items */
+}
+.split-2{
+    display:grid;
+    grid-template-columns: 1fr 1fr;
+    gap:1rem;
 }
 
-/* DAYCARD — base */
+/* Left panel */
+.tabs-panel{
+    display:flex;
+    flex-direction:column;
+    gap:.6rem;
+}
+
+/* Weekday header (Mon..Sun) */
+.weekday-header{
+    display:grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap:.4rem;
+}
+.weekday-cell{
+    text-align:center;
+    font-weight:700;
+    font-size:.9rem;
+    color: var(--PrimaryDarkText);
+}
+
+/* Calendar grid (wrap each 7 tabs) */
+.tabs-strip-grid{
+    display:grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap:.4rem;
+}
+.daycell-empty{
+    height:96px;
+    border-radius:10px;
+    background: transparent;
+}
+
+/* Day card (kept from your style, adapted to grid cell) */
 .daycard {
-    scroll-snap-align: start;
     border: none;
-    padding: .6rem .8rem;
+    padding: .6rem .4rem;
     border-radius: 10px;
     cursor: pointer;
     background: var(--Secondary, #074252);
     color: #fff;
-    /* Layout for day (top) and icon (bottom) */
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: space-between;
     gap: 8px;
-    min-height: 96px; /* taller to fit larger icon */
-    /* No visual borders/shadows */
+    min-height: 96px;
     outline: none;
     box-shadow: none;
-    /* Smooth transforms/background only */
     transition: transform .18s ease, background .28s ease, opacity .18s ease;
 }
+.daycard:hover { transform: translateY(-2px) scale(1.03); }
+.daycard:active { transform: translateY(0) scale(.98); }
+.daycard:focus-visible { filter: brightness(1.08); }
+.daycard.active { transform: scale(1.08); }
 
-    /* Keep ONLY the hover transform (no shadows) */
-    .daycard:hover {
-        transform: translateY(-2px) scale(1.03);
-    }
-
-    /* Press feedback (no shadows) */
-    .daycard:active {
-        transform: translateY(0) scale(.98);
-    }
-
-    /* Accessible focus without borders/shadows */
-    .daycard:focus-visible {
-        filter: brightness(1.08);
-    }
-
-    /* Selected tab — make it bigger (no borders/shadows) */
-    .daycard.active {
-        transform: scale(1.08);
-    }
-
-/* Content: day number (top) + icon (bottom) */
-.daycard-day, .tab-day {
-    font-weight: 700;
-    font-size: 1rem;
-    line-height: 1;
-    color: #fff;
-    text-align: center;
+.daycard-day{
+    font-weight:700;
+    font-size:1rem;
+    line-height:1;
+    color:#fff;
+    text-align:center;
 }
-
-.daycard-icon, .tab-icon {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 100%;
+.daycard-icon{
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    width:100%;
 }
-
-/* Bigger image size */
-:root {
-    --DayIconSize: 56px;
-}
-/* adjust to taste: 56–64px looks great */
-.daycard-icon img,
-.tab-icon img {
-    width: var(--DayIconSize);
-    height: var(--DayIconSize);
-    object-fit: contain;
+:root { --DayIconSize: 56px; }
+.daycard-icon img{ width:var(--DayIconSize); height:var(--DayIconSize); object-fit:contain; display:block; }
+.day-layout .moonday-row img {
+    width: var(--MoondayIconSize);
+    height: var(--MoondayIconSize);
     display: block;
+    margin: 0 auto;}
+/* Right panel: 5 fixed rows as requested */
+    .day-layout{
+    display:grid;
+    grid-template-rows: auto auto auto auto auto; /* 5 rows */
+    gap:.6rem;
+    align-content:start;
 }
 
-/* Respect reduced motion: keep layout but remove animation */
-@media (prefers-reduced-motion: reduce) {
-    .daycard {
-        transition: none !important;
+    .day-layout .month-row,
+    .day-layout .daynum-row,
+    .day-layout .weekday-row {
+        text-align: center;
+        justify-self: center;
+        align-self: center;
+        width: 100%;
     }
 
-        .daycard:hover,
-        .daycard:active,
-        .daycard.active {
-            transform: none !important;
-        }
+/* Row styles */
+.day-layout .month-row{
+    font-size:1.1rem; font-weight:700; text-transform:capitalize;
+}
+.day-layout .daynum-row{
+    font-size:2.5rem; font-weight:800; line-height:1;
+}
+.day-layout .weekday-row{
+    font-size:1rem; font-weight:600; opacity:.85; text-transform:capitalize; text-align: center; align-self:center; 
+}
+.day-layout .moonday-row{
+    display:flex; align-items:center; gap:.6rem; min-height:70px;
+}
+.muted{ color: var(--Gray500); }
+
+/* Row 5: two columns Sun(left) / Moon(right) */
+.astro-two-col{
+    display:grid;
+    grid-template-columns: 1fr 1fr;
+    gap:.8rem;
+}
+.astro-col{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:.4rem;
+    padding:.6rem;
+    background: var(--ShadedBackground);
+    border-radius:12px;
+}
+.astro-label{ font-weight:600; }
+
+/* Events list under rows (optional) */
+.events-list{
+    grid-column: 1 / -1;
+    margin:.4rem 0 0 0;
+    padding-left:1rem;
+}
+
+/* Responsive: stack columns on small screens */
+@media (max-width: 900px){
+    .split-2{ grid-template-columns: 1fr; }
 }

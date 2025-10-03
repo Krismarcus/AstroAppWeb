@@ -6,8 +6,6 @@ namespace Astrodaiva.Blazor.Utils
     public static class Zodiac
     {
         private static readonly string[] Symbols = { "♈","♉","♊","♋","♌","♍","♎","♏","♐","♑","♒","♓" };
-        private static readonly string[] Names = { "Aries","Taurus","Gemini","Cancer","Leo","Virgo","Libra","Scorpio","Sagittarius","Capricorn","Aquarius","Pisces" };
-
         private static int ToIndex(ZodiacSign sign)
         {
             var raw = (int)sign;
@@ -16,19 +14,13 @@ namespace Astrodaiva.Blazor.Utils
         }
 
         public static string Symbol(ZodiacSign sign) => Symbols[ToIndex(sign)];
-        public static string Name(ZodiacSign sign) => Names[ToIndex(sign)];
+        public static string Name(ZodiacSign sign) => sign.ToString();
 
         public static string Symbol(int signIndex)
         {
             int i = ((signIndex % 12) + 12) % 12;
             return Symbols[i];
-        }
-
-        public static string Name(int signIndex)
-        {
-            int i = (((signIndex % 12) + 12) % 12);
-            return Names[i];
-        }
+        }        
 
         public static string ImageFile(ZodiacSign sign) => sign switch
         {
@@ -47,7 +39,7 @@ namespace Astrodaiva.Blazor.Utils
             _ => "unknown.png"
         };
 
-        public static string ImagePath(ZodiacSign sign) => $"img/zodiac/{ImageFile(sign)}";
+        public static string ImagePath(ZodiacSign sign) => $"img/zodiac/{sign.ToString().ToLowerInvariant()}.png";
 
         public static string Color(ZodiacSign sign) => sign switch
         {

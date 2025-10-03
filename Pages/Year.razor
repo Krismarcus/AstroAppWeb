@@ -66,10 +66,11 @@
                             </div>
 
                             <!-- Retrograde Bar -->
+                            <!-- Retrograde Bar -->
                             <div class="retrograde-bar-container">
                                 @foreach (var retroSegment in GetRetrogradeSegments(planetRow.PlanetName))
                                 {
-                                    var key = MakeRetroKey(planetRow.PlanetName, retroSegment.StartDate);
+                                    var key = MakeRetroKey(planetRow.PlanetName.ToString(), retroSegment.StartDate);
                                     <span class="retrograde-bar @(key == _activeRetroKey ? "is-active" : null)"
                                           style="width:@(retroSegment.WidthPercentage)%; left:@(retroSegment.LeftPosition)%"
                                           title="@($"{planetRow.PlanetName} Retrograde: {retroSegment.StartDate:MMM d} - {retroSegment.EndDate:MMM d}")"
@@ -121,7 +122,7 @@
     private string _selectedPlanetInfo = "";
 
     // Selection
-    private string? _selectedPlanetName;
+    private Planet? _selectedPlanetName;
     private ZodiacSegment? _selectedSegment;
 
     // Hover
@@ -131,6 +132,14 @@
     private string? _activeRetroKey;
     private static string MakeRetroKey(string planetName, DateTime start)
         => $"{planetName}:{start:yyyyMMdd}";
+
+    // Order shown in the UI
+    private static readonly Planet[] PlanetsOrder = new[]
+    {
+        Planet.Sun, Planet.Mercury, Planet.Venus, Planet.Mars, Planet.Jupiter,
+        Planet.Saturn, Planet.Uranus, Planet.Neptune, Planet.Pluto,
+        Planet.Selena, Planet.Lilith, Planet.Rahu, Planet.Ketu
+    };
 
     protected override async Task OnInitializedAsync()
     {
@@ -154,11 +163,10 @@
         StateHasChanged();
     }
 
-    private void SelectSegment(string planetName, ZodiacSegment segment)
+    private void SelectSegment(Planet planetName, ZodiacSegment segment)
     {
         if (segment == null) return;
 
-        // Toggle off when clicking same segment
         if (_selectedPlanetName == planetName && AreSegmentsEqual(_selectedSegment, segment))
         {
             ClearSelection();
@@ -166,10 +174,8 @@
             return;
         }
 
-        // Planet info
-        var planet = GetPlanetFromName(planetName);
         var infoSourceItem = _db?.PlanetInZodiacsDB?.FirstOrDefault(p =>
-            p.Planet == planet && p.ZodiacSign == segment.ZodiacSign);
+            p.Planet == planetName && p.ZodiacSign == segment.ZodiacSign);
 
         _selectedPlanetInZodiacText = $"{planetName} in {Zodiac.Name(segment.ZodiacSign)}";
         _selectedStartDateText = $"From {segment.ZodiacStartDate:MMMM d, HH:mm}";
@@ -179,7 +185,7 @@
         _selectedPlanetName = planetName;
         _selectedSegment = segment;
         _showEventDetails = true;
-        _activeRetroKey = null; // reset touch state
+        _activeRetroKey = null;
         StateHasChanged();
     }
 
@@ -203,46 +209,43 @@
                _hoveredSegment.ZodiacEndDate >= month.MonthStartDate;
     }
 
-    private List<RetrogradeSegment> GetRetrogradeSegments(string planetName)
+    private List<RetrogradeSegment> GetRetrogradeSegments(Planet planet)
     {
         var segments = new List<RetrogradeSegment>();
         var activeAstroEvents = _db?.AstroEventsDB?
-            .Where(e => e.Date.Year == _year && e.Date.Month >= 1 && e.Date.Month <= 12)
+            .Where(e => e.Date.Year == _year)
             .OrderBy(e => e.Date)
             .ToList();
 
-        if (activeAstroEvents == null || !activeAstroEvents.Any())
+        if (activeAstroEvents == null || activeAstroEvents.Count == 0)
             return segments;
 
-        bool? lastRetrogradeState = null;
+        bool? lastRetrograde = null;
         DateTime? startDate = null;
 
         foreach (var astroEvent in activeAstroEvents)
         {
-            bool? currentRetrogradeState = GetPlanetRetrogradeState(astroEvent, planetName);
-            if (currentRetrogradeState == null) continue;
+            bool? current = GetPlanetRetrogradeState(astroEvent, planet);
+            if (current == null) continue;
 
-            if (lastRetrogradeState == null || currentRetrogradeState != lastRetrogradeState)
+            if (lastRetrograde == null || current != lastRetrograde)
             {
-                if (startDate != null && lastRetrogradeState == true)
+                if (startDate != null && lastRetrograde == true)
                 {
-                    var seg = CreateRetrogradeSegment(startDate.Value, astroEvent.Date.AddDays(-1));
-                    segments.Add(seg);
+                    segments.Add(CreateRetrogradeSegment(startDate.Value, astroEvent.Date.AddDays(-1)));
                 }
 
-                if (currentRetrogradeState == true)
-                {
+                if (current == true)
                     startDate = astroEvent.Date;
-                }
-                lastRetrogradeState = currentRetrogradeState;
+
+                lastRetrograde = current;
             }
         }
 
-        if (startDate != null && lastRetrogradeState == true)
+        if (startDate != null && lastRetrograde == true)
         {
             var lastEvent = activeAstroEvents.Last();
-            var seg = CreateRetrogradeSegment(startDate.Value, lastEvent.Date);
-            segments.Add(seg);
+            segments.Add(CreateRetrogradeSegment(startDate.Value, lastEvent.Date));
         }
 
         return segments;
@@ -266,21 +269,18 @@
         };
     }
 
-    private bool? GetPlanetRetrogradeState(AstroEvent astroEvent, string planetName)
+    private bool? GetPlanetRetrogradeState(AstroEvent e, Planet planet) => planet switch
     {
-        return planetName switch
-        {
-            "Mercury" => astroEvent.MercuryInZodiac?.IsRetrograde,
-            "Venus" => astroEvent.VenusInZodiac?.IsRetrograde,
-            "Mars" => astroEvent.MarsInZodiac?.IsRetrograde,
-            "Jupiter" => astroEvent.JupiterInZodiac?.IsRetrograde,
-            "Saturn" => astroEvent.SaturnInZodiac?.IsRetrograde,
-            "Uranus" => astroEvent.UranusInZodiac?.IsRetrograde,
-            "Neptune" => astroEvent.NeptuneInZodiac?.IsRetrograde,
-            "Pluto" => astroEvent.PlutoInZodiac?.IsRetrograde,
-            _ => null
-        };
-    }
+        Planet.Mercury => e.MercuryInZodiac?.IsRetrograde,
+        Planet.Venus => e.VenusInZodiac?.IsRetrograde,
+        Planet.Mars => e.MarsInZodiac?.IsRetrograde,
+        Planet.Jupiter => e.JupiterInZodiac?.IsRetrograde,
+        Planet.Saturn => e.SaturnInZodiac?.IsRetrograde,
+        Planet.Uranus => e.UranusInZodiac?.IsRetrograde,
+        Planet.Neptune => e.NeptuneInZodiac?.IsRetrograde,
+        Planet.Pluto => e.PlutoInZodiac?.IsRetrograde,
+        _ => null // Sun/Nodes/Selena/Lilith usually not used for retrograde bars
+    };
 
     private void HideEventDetails()
     {
@@ -289,36 +289,14 @@
         StateHasChanged();
     }
 
-    private bool IsSegmentSelected(string planetName, ZodiacSegment segment)
-    {
-        return _selectedPlanetName == planetName && AreSegmentsEqual(_selectedSegment, segment);
-    }
+    private bool IsSegmentSelected(Planet planetName, ZodiacSegment segment)
+        => _selectedPlanetName == planetName && AreSegmentsEqual(_selectedSegment, segment);
 
-    private bool AreSegmentsEqual(ZodiacSegment? seg1, ZodiacSegment? seg2)
-    {
-        if (seg1 == null || seg2 == null) return false;
-        return seg1.ZodiacSign == seg2.ZodiacSign &&
-               seg1.ZodiacStartDate == seg2.ZodiacStartDate &&
-               seg1.ZodiacEndDate == seg2.ZodiacEndDate;
-    }
-
-    private Planet GetPlanetFromName(string planetName) => planetName switch
-    {
-        "Sun" => Planet.Sun,
-        "Mercury" => Planet.Mercury,
-        "Venus" => Planet.Venus,
-        "Mars" => Planet.Mars,
-        "Jupiter" => Planet.Jupiter,
-        "Saturn" => Planet.Saturn,
-        "Uranus" => Planet.Uranus,
-        "Neptune" => Planet.Neptune,
-        "Pluto" => Planet.Pluto,
-        "Selena" => Planet.Selena,
-        "Lilith" => Planet.Lilith,
-        "Rahu" => Planet.Rahu,
-        "Ketu" => Planet.Ketu,
-        _ => Planet.Sun
-    };
+    private static bool AreSegmentsEqual(ZodiacSegment? a, ZodiacSegment? b)
+        => a is not null && b is not null
+           && a.ZodiacSign == b.ZodiacSign
+           && a.ZodiacStartDate == b.ZodiacStartDate
+           && a.ZodiacEndDate == b.ZodiacEndDate;
 
     private void ClearSelection()
     {
@@ -338,16 +316,15 @@
         _planetRows.Clear();
         _monthSegments.Clear();
 
-        var activeAstroEvents = _db?.AstroEventsDB?
-            .Where(e => e.Date.Year == _year && e.Date.Month >= 1 && e.Date.Month <= 12)
+        var events = _db?.AstroEventsDB?
+            .Where(e => e.Date.Year == _year)
             .OrderBy(e => e.Date)
             .ToList();
 
-        if (activeAstroEvents == null || !activeAstroEvents.Any())
-            return;
+        if (events == null || events.Count == 0) return;
 
-        GenerateMonthSegments(activeAstroEvents);
-        GeneratePlanetSegments(activeAstroEvents);
+        GenerateMonthSegments(events);
+        GeneratePlanetSegments(events);
     }
 
     private void GenerateMonthSegments(List<AstroEvent> events)
@@ -363,98 +340,93 @@
             if (monthEnd > lastEvent.Date) monthEnd = lastEvent.Date;
 
             var daysInMonth = (monthEnd - monthStart).Days + 1;
-            var widthPercentage = (daysInMonth * 100.0) / 365;
+            var width = (daysInMonth * 100.0) / 365;
 
             _monthSegments.Add(new MonthSegment
             {
                 MonthStartDate = monthStart,
                 MonthEndDate = monthEnd,
-                WidthPercentage = widthPercentage
+                WidthPercentage = width
             });
         }
     }
 
     private void GeneratePlanetSegments(List<AstroEvent> events)
     {
-        var planets = new[] { "Sun", "Mercury", "Venus", "Mars", "Jupiter", "Saturn", "Uranus", "Neptune", "Pluto", "Selena", "Lilith", "Rahu", "Ketu" };
-
-        foreach (var planetName in planets)
+        foreach (var planet in PlanetsOrder)
         {
-            var segments = BuildPlanetSegments(events, planetName);
-            _planetRows.Add(new PlanetRow { PlanetName = planetName, Segments = segments });
+            var segments = BuildPlanetSegments(events, planet);
+            _planetRows.Add(new PlanetRow { PlanetName = planet, Segments = segments });
         }
     }
 
-    private List<ZodiacSegment> BuildPlanetSegments(List<AstroEvent> events, string planetName)
+    private List<ZodiacSegment> BuildPlanetSegments(List<AstroEvent> events, Planet planet)
     {
         var segments = new List<ZodiacSegment>();
         ZodiacSign? lastSign = null;
         DateTime? startDate = null;
 
-        foreach (var astroEvent in events)
+        foreach (var e in events)
         {
-            ZodiacSign? currentSign = GetPlanetZodiacSign(astroEvent, planetName);
-            if (currentSign == null) continue;
+            var current = GetPlanetZodiacSign(e, planet);
+            if (current == null) continue;
 
-            if (lastSign == null || currentSign != lastSign)
+            if (lastSign == null || current != lastSign)
             {
                 if (startDate != null && lastSign != null)
-                {
-                    var seg = CreateZodiacSegment(lastSign.Value, startDate.Value, astroEvent.Date.AddDays(-1));
-                    segments.Add(seg);
-                }
-                startDate = astroEvent.Date;
-                lastSign = currentSign;
+                    segments.Add(CreateZodiacSegment(lastSign.Value, startDate.Value, e.Date.AddDays(-1)));
+
+                startDate = e.Date;
+                lastSign = current;
             }
         }
 
         if (startDate != null && lastSign != null)
         {
             var lastEvent = events.Last();
-            var seg = CreateZodiacSegment(lastSign.Value, startDate.Value, lastEvent.Date);
-            segments.Add(seg);
+            segments.Add(CreateZodiacSegment(lastSign.Value, startDate.Value, lastEvent.Date));
         }
 
         return segments;
     }
 
-    private ZodiacSegment CreateZodiacSegment(ZodiacSign sign, DateTime startDate, DateTime endDate)
+    private static ZodiacSegment CreateZodiacSegment(ZodiacSign sign, DateTime start, DateTime end)
     {
-        var duration = (endDate - startDate).Days + 1;
-        var widthPercentage = (duration * 100.0) / 365;
+        var duration = (end - start).Days + 1;
+        var width = (duration * 100.0) / 365;
 
         return new ZodiacSegment
         {
             ZodiacSign = sign,
-            ZodiacStartDate = startDate,
-            ZodiacEndDate = endDate,
+            ZodiacStartDate = start,
+            ZodiacEndDate = end,
             Duration = duration,
-            WidthPercentage = widthPercentage
+            WidthPercentage = width
         };
     }
 
-    private ZodiacSign? GetPlanetZodiacSign(AstroEvent astroEvent, string planetName) => planetName switch
+    private static ZodiacSign? GetPlanetZodiacSign(AstroEvent e, Planet planet) => planet switch
     {
-        "Sun" => astroEvent.SunInZodiac?.NewZodiacSign,
-        "Mercury" => astroEvent.MercuryInZodiac?.NewZodiacSign,
-        "Venus" => astroEvent.VenusInZodiac?.NewZodiacSign,
-        "Mars" => astroEvent.MarsInZodiac?.NewZodiacSign,
-        "Jupiter" => astroEvent.JupiterInZodiac?.NewZodiacSign,
-        "Saturn" => astroEvent.SaturnInZodiac?.NewZodiacSign,
-        "Uranus" => astroEvent.UranusInZodiac?.NewZodiacSign,
-        "Neptune" => astroEvent.NeptuneInZodiac?.NewZodiacSign,
-        "Pluto" => astroEvent.PlutoInZodiac?.NewZodiacSign,
-        "Selena" => astroEvent.SelenaInZodiac?.NewZodiacSign,
-        "Lilith" => astroEvent.LilithInZodiac?.NewZodiacSign,
-        "Rahu" => astroEvent.RahuInZodiac?.NewZodiacSign,
-        "Ketu" => astroEvent.KetuInZodiac?.NewZodiacSign,
+        Planet.Sun => e.SunInZodiac?.NewZodiacSign,
+        Planet.Mercury => e.MercuryInZodiac?.NewZodiacSign,
+        Planet.Venus => e.VenusInZodiac?.NewZodiacSign,
+        Planet.Mars => e.MarsInZodiac?.NewZodiacSign,
+        Planet.Jupiter => e.JupiterInZodiac?.NewZodiacSign,
+        Planet.Saturn => e.SaturnInZodiac?.NewZodiacSign,
+        Planet.Uranus => e.UranusInZodiac?.NewZodiacSign,
+        Planet.Neptune => e.NeptuneInZodiac?.NewZodiacSign,
+        Planet.Pluto => e.PlutoInZodiac?.NewZodiacSign,
+        Planet.Selena => e.SelenaInZodiac?.NewZodiacSign,
+        Planet.Lilith => e.LilithInZodiac?.NewZodiacSign,
+        Planet.Rahu => e.RahuInZodiac?.NewZodiacSign,
+        Planet.Ketu => e.KetuInZodiac?.NewZodiacSign,
         _ => null
     };
 
     // Helper classes
     public class PlanetRow
     {
-        public string PlanetName { get; set; } = "";
+        public Planet PlanetName { get; set; }
         public List<ZodiacSegment> Segments { get; set; } = new();
     }
 
@@ -482,6 +454,7 @@
         public double LeftPosition { get; set; }
     }
 }
+
 
 <style>
     .timeline-container {
