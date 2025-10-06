@@ -1,11 +1,13 @@
 @page "/"
 @inject Astrodaiva.Blazor.Services.AstroDataService Data
+@inject IJSRuntime JS
 @using Astrodaiva.Data
 @using Astrodaiva.Data.Models
 @using System.Globalization
 @using System.Linq
 @using Astrodaiva.Data.Enums
 @using Astrodaiva.Blazor.Utils
+@using Microsoft.JSInterop
 
 <div class="card month-header">
     <button type="button" class="nav-btn" @onclick="PrevMonth">◀</button>
@@ -20,7 +22,7 @@
 else
 {
     <div class="card split-2">
-        <!-- LEFT COLUMN: tabs-strip as a weekday table (7 columns) -->
+        <!-- LEFT: calendar -->
         <div class="tabs-panel">
             <div class="weekday-header">
                 @foreach (var wd in _weekdaysShort)
@@ -32,38 +34,27 @@ else
             <div class="tabs-strip-grid">
                 @foreach (var week in _weeks)
                 {
-                    @* one row per week, 7 columns *@
-                    @foreach (var day in week)
+                    foreach (var day in week)
                     {
                         if (day is null)
                         {
                             <div class="daycell-empty"></div>
+                            ;
                         }
                         else
                         {
                             var d = day.Value;
                             var active = d == _selectedDay ? "active" : "";
-
                             var e = _monthEvents.FirstOrDefault(x => x.Date.Day == d);
-                            string? moonDay = null;
-                            if (e?.MoonDay is not null)
-                            {
-                                var name = GetMoonDayName((int)e.MoonDay.NewMoonDay);
-                                moonDay = name.ToLower();
-                            }
+                            string? moonDay = e?.MoonDay is not null ? GetMoonDayName((int)e.MoonDay.NewMoonDay).ToLower() : null;
 
-                            <button @key="d"
-                                    type="button"
-                                    class="daycard @active"
-                                    title="@($"{_current:MMMM yyyy}")"
+                            <button @key="d" type="button" class="daycard @active" title="@($"{_current:MMMM yyyy}")"
                                     @onclick="@(() => SelectDay(d))">
                                 <span class="daycard-day">@d</span>
                                 <span class="daycard-icon">
                                     @if (!string.IsNullOrEmpty(moonDay))
                                     {
-                                        <img src="@($"img/zodiac/{moonDay}.png")"
-                                             alt="@moonDay" title="@moonDay"
-                                             width="20" height="20" />
+                                        <img src="@($"img/zodiac/{moonDay}.png")" alt="@moonDay" title="@moonDay" width="20" height="20" />
                                     }
                                 </span>
                             </button>
@@ -73,102 +64,22 @@ else
             </div>
         </div>
 
-        <!-- RIGHT COLUMN: selected day content with requested rows -->
-        <div class="tab-content day-layout">
-            <!-- Row 1: Month -->
-            <div class="row month-row">@_current.ToString("MMMM yyyy", CultureInfo.InvariantCulture)</div>
+        <!-- RIGHT: desktop-only -->
+        <div class="tab-content day-layout desktop-right">
+            @RightPanelContent()
+        </div>
+    </div>
 
-            <!-- Row 2: Day of month -->
-            <div class="row daynum-row">@_current.Day</div>
-
-            <!-- Row 3: Week day -->
-            <div class="row weekday-row">@_current.ToString("dddd", CultureInfo.InvariantCulture)</div>
-
-            <!-- Row 4: Moon-day icon -->
-            <div class="row moonday-row">
-                @{
-                    var mo = _monthEvents.FirstOrDefault(x => x.Date.Date == _current.Date);
-                    string? moonDayIcon = null;
-                    if (mo?.MoonDay is not null)
-                    {
-                        moonDayIcon = GetMoonDayName((int)mo.MoonDay.NewMoonDay).ToLower();
-                    }
-                }
-                @if (!string.IsNullOrEmpty(moonDayIcon))
-                {
-                    <img alt="Moon Day" src="@($"img/zodiac/{moonDayIcon}.png")" width="64" height="64" />
-                }
-                else
-                {
-                    <span class="muted">No Moon-day symbol</span>
-                }
+    <!-- MOBILE OVERLAY: toggled by _overlayOpen; only visible via CSS on small screens -->
+    <div class="mobile-overlay @( _overlayOpen ? "open" : "" )" aria-hidden="@(!_overlayOpen)">
+        <div class="mobile-overlay__backdrop" @onclick="CloseOverlay"></div>
+        <div class="mobile-overlay__panel" role="dialog" aria-modal="true">
+            <div class="mobile-overlay__header">
+                <button type="button" class="overlay-close" @onclick="CloseOverlay">✕</button>
             </div>
-
-            <!-- Row 5: Two columns: Sun (left) / Moon (right) -->
-            <div class="row dual astro-two-col">
-                @{
-                    var dayEvents = DayEvents.ToList();
-                    var first = dayEvents.FirstOrDefault();
-                }
-
-                <!-- Sun (left) -->
-                <div class="astro-col">
-                    <img alt="Sun" src="img/zodiac/sun.png" width="40" height="40" />
-                    @if (first?.SunInZodiac is not null)
-                    {
-                        var sunSignName = GetSignName((int)first.SunInZodiac.NewZodiacSign);
-                        var sunIcon = sunSignName.ToLower();
-                        <div class="astro-label">Sun in @sunSignName</div>
-                        <img alt="Sun sign" src="@($"img/zodiac/{sunIcon}.png")" width="64" height="64" />
-                    }
-                    else
-                    {
-                        <div class="muted">—</div>
-                    }
-                </div>
-
-                <!-- Moon (right) -->
-                <div class="astro-col">
-                    <img alt="Moon" src="img/zodiac/moon.png" width="40" height="40" />
-                    @if (first?.MoonInZodiac is not null)
-                    {
-                        var moonSignName = GetSignName((int)first.MoonInZodiac.NewZodiacSign);
-                        var moonIcon = moonSignName.ToLower();
-                        <div class="astro-label">Moon in @moonIcon</div>
-                        <img alt="Moon sign" src="@($"img/zodiac/{moonIcon}.png")" width="64" height="64" />
-                    }
-                    else
-                    {
-                        <div class="muted">—</div>
-                    }
-                </div>
+            <div class="mobile-overlay__body">
+                @RightPanelContent()
             </div>
-
-            @* Optional events list below the five rows *@
-            @if (DayEvents.Any())
-            {
-                <ul class="events-list">
-                    @foreach (var e in DayEvents)
-                    {
-                        if (!string.IsNullOrWhiteSpace(e.EventText))
-                        {
-                            <li>@e.EventText</li>
-                        }
-                        else if (e.PlanetEvents is not null && e.PlanetEvents.Count > 0)
-                        {
-                            <li>@string.Join(", ", e.PlanetEvents.Select(pe => $"{pe.Planet1} {pe.AspectSymbol} {pe.Planet2}"))</li>
-                        }
-                        else
-                        {
-                            <li>Event</li>
-                        }
-                    }
-                </ul>
-            }
-            else
-            {
-                <div class="muted">No events on this day.</div>
-            }
         </div>
     </div>
 }
@@ -181,13 +92,14 @@ else
     private int _month;
     private int _selectedDay;
 
-    // Left panel calendar data: weeks => 7-day rows (null for padding cells)
+    // Single UI flag (no JS)
+    private bool _overlayOpen = false;
+
     private List<List<int?>> _weeks = new();
     private readonly string[] _weekdaysShort = new[] { "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun" };
 
     private IEnumerable<AstroEvent> DayEvents
-        => _monthEvents.Where(e => e.Date.Day == _selectedDay)
-                       .OrderBy(e => e.Date);
+        => _monthEvents.Where(e => e.Date.Day == _selectedDay).OrderBy(e => e.Date);
 
     private static string GetSignName(int sign) => EnumText.GetName<ZodiacSign>(sign);
     private static string GetMoonDayName(int symbol) => EnumText.GetName<MoonDaySymbol>(symbol);
@@ -214,70 +126,113 @@ else
 
     private void RecomputeMonthEvents()
     {
-        if (_db?.AstroEventsDB != null)
-        {
-            _monthEvents = _db.AstroEventsDB
-                .Where(x => x.Date.Year == _year && x.Date.Month == _month)
-                .OrderBy(x => x.Date)
-                .ToList();
-        }
-        else
-        {
-            _monthEvents = new List<AstroEvent>();
-        }
+        _monthEvents = _db?.AstroEventsDB?
+            .Where(x => x.Date.Year == _year && x.Date.Month == _month)
+            .OrderBy(x => x.Date)
+            .ToList() ?? new List<AstroEvent>();
     }
 
-    // Build a calendar grid (weeks with 7 columns, Monday-first)
     private void BuildWeeks()
     {
         _weeks.Clear();
         var firstOfMonth = new DateTime(_year, _month, 1);
         var dim = DateTime.DaysInMonth(_year, _month);
-
-        // Convert DayOfWeek (Sunday=0) to Monday-first index (Mon=0..Sun=6)
-        int mondayFirstIndex(int dow)
-            => ((dow - (int)DayOfWeek.Monday) + 7) % 7;
-
+        int mondayFirstIndex(int dow) => ((dow - (int)DayOfWeek.Monday) + 7) % 7;
         int startOffset = mondayFirstIndex((int)firstOfMonth.DayOfWeek);
 
         var days = Enumerable.Repeat<int?>(null, startOffset)
                              .Concat(Enumerable.Range(1, dim).Select(i => (int?)i))
                              .ToList();
-
-        // pad end to multiple of 7
         int pad = (7 - (days.Count % 7)) % 7;
         if (pad > 0) days.AddRange(Enumerable.Repeat<int?>(null, pad));
 
         for (int i = 0; i < days.Count; i += 7)
-        {
             _weeks.Add(days.Skip(i).Take(7).ToList());
-        }
     }
 
     private async Task SelectDay(int day)
     {
         _selectedDay = day;
         _current = new DateTime(_year, _month, _selectedDay);
+
+        // Open overlay only on mobile
+        bool isMobile = await JS.InvokeAsync<bool>("ui.isMobile");
+        _overlayOpen = isMobile;
+
         await InvokeAsync(StateHasChanged);
     }
 
     private async Task PrevMonth()
     {
         var d = new DateTime(_year, _month, 1).AddMonths(-1);
-        _year = d.Year;
-        _month = d.Month;
-        _selectedDay = 1;
+        _year = d.Year; _month = d.Month; _selectedDay = 1;
         RecomputeMonth();
+        _overlayOpen = false;
         await InvokeAsync(StateHasChanged);
     }
 
     private async Task NextMonth()
     {
         var d = new DateTime(_year, _month, 1).AddMonths(1);
-        _year = d.Year;
-        _month = d.Month;
-        _selectedDay = 1;
+        _year = d.Year; _month = d.Month; _selectedDay = 1;
         RecomputeMonth();
+        _overlayOpen = false;
         await InvokeAsync(StateHasChanged);
     }
+
+    private void CloseOverlay() => _overlayOpen = false;
+
+    private RenderFragment RightPanelContent() => __builder =>
+    {
+        __builder.AddMarkupContent(0, $"<div class=\"row month-row\">{_current.ToString("MMMM yyyy", CultureInfo.InvariantCulture)}</div>");
+        __builder.AddMarkupContent(1, $"<div class=\"row daynum-row\">{_current.Day}</div>");
+        __builder.AddMarkupContent(2, $"<div class=\"row weekday-row\">{_current.ToString("dddd", CultureInfo.InvariantCulture)}</div>");
+
+        var mo = _monthEvents.FirstOrDefault(x => x.Date.Date == _current.Date);
+        string? moonDayIcon = mo?.MoonDay is not null ? GetMoonDayName((int)mo.MoonDay.NewMoonDay).ToLower() : null;
+
+        if (!string.IsNullOrEmpty(moonDayIcon))
+            __builder.AddMarkupContent(3, $"<div class=\"row moonday-row\"><img alt=\"Moon Day\" src=\"img/zodiac/{moonDayIcon}.png\" width=\"64\" height=\"64\" /></div>");
+        else
+            __builder.AddMarkupContent(4, "<div class=\"row moonday-row\"><span class=\"muted\">No Moon-day symbol</span></div>");
+
+        var dayEvents = DayEvents.ToList();
+        var first = dayEvents.FirstOrDefault();
+
+        var sunBlock = first?.SunInZodiac is not null
+            ? $"<div class=\"astro-label\">Sun in {GetSignName((int)first.SunInZodiac.NewZodiacSign)}</div><img alt=\"Sun sign\" src=\"img/zodiac/{GetSignName((int)first.SunInZodiac.NewZodiacSign).ToLower()}.png\" width=\"64\" height=\"64\" />"
+            : "<div class=\"muted\">—</div>";
+
+        var moonBlock = first?.MoonInZodiac is not null
+            ? $"<div class=\"astro-label\">Moon in {GetSignName((int)first.MoonInZodiac.NewZodiacSign)}</div><img alt=\"Moon sign\" src=\"img/zodiac/{GetSignName((int)first.MoonInZodiac.NewZodiacSign).ToLower()}.png\" width=\"64\" height=\"64\" />"
+            : "<div class=\"muted\">—</div>";
+
+        __builder.AddMarkupContent(5, $@"
+            <div class=""row dual astro-two-col"">
+                <div class=""astro-col"">
+                    <img alt=""Sun"" src=""img/zodiac/sun.png"" width=""40"" height=""40"" />
+                    {sunBlock}
+                </div>
+                <div class=""astro-col"">
+                    <img alt=""Moon"" src=""img/zodiac/moon.png"" width=""40"" height=""40"" />
+                    {moonBlock}
+                </div>
+            </div>");
+
+        if (DayEvents.Any())
+        {
+            var items = string.Join("", DayEvents.Select(e =>
+                !string.IsNullOrWhiteSpace(e.EventText)
+                    ? $"<li>{e.EventText}</li>"
+                    : (e.PlanetEvents is { Count: > 0 }
+                        ? $"<li>{string.Join(", ", e.PlanetEvents.Select(pe => $"{pe.Planet1} {pe.AspectSymbol} {pe.Planet2}"))}</li>"
+                        : "<li>Event</li>")
+            ));
+            __builder.AddMarkupContent(6, $"<ul class=\"events-list\">{items}</ul>");
+        }
+        else
+        {
+            __builder.AddMarkupContent(7, "<div class=\"muted\">No events on this day.</div>");
+        }
+    };
 }
