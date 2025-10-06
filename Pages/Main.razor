@@ -1,13 +1,11 @@
 @page "/"
 @inject Astrodaiva.Blazor.Services.AstroDataService Data
-@inject IJSRuntime JS
 @using Astrodaiva.Data
 @using Astrodaiva.Data.Models
 @using System.Globalization
 @using System.Linq
 @using Astrodaiva.Data.Enums
 @using Astrodaiva.Blazor.Utils
-@using Microsoft.JSInterop
 
 <div class="card month-header">
     <button type="button" class="nav-btn" @onclick="PrevMonth">◀</button>
@@ -39,7 +37,6 @@ else
                         if (day is null)
                         {
                             <div class="daycell-empty"></div>
-                            ;
                         }
                         else
                         {
@@ -48,13 +45,16 @@ else
                             var e = _monthEvents.FirstOrDefault(x => x.Date.Day == d);
                             string? moonDay = e?.MoonDay is not null ? GetMoonDayName((int)e.MoonDay.NewMoonDay).ToLower() : null;
 
-                            <button @key="d" type="button" class="daycard @active" title="@($"{_current:MMMM yyyy}")"
+                            <button @key="d"
+                                    type="button"
+                                    class="daycard @active"
+                                    title="@($"{_current:MMMM yyyy}")"
                                     @onclick="@(() => SelectDay(d))">
                                 <span class="daycard-day">@d</span>
                                 <span class="daycard-icon">
                                     @if (!string.IsNullOrEmpty(moonDay))
                                     {
-                                        <img src="@($"img/zodiac/{moonDay}.png")" alt="@moonDay" title="@moonDay" width="20" height="20" />
+                                        <img src="@($"img/zodiac/{moonDay}.png")" alt="@moonDay" />
                                     }
                                 </span>
                             </button>
@@ -64,13 +64,13 @@ else
             </div>
         </div>
 
-        <!-- RIGHT: desktop-only -->
+        <!-- RIGHT: desktop-only panel -->
         <div class="tab-content day-layout desktop-right">
             @RightPanelContent()
         </div>
     </div>
 
-    <!-- MOBILE OVERLAY: toggled by _overlayOpen; only visible via CSS on small screens -->
+    <!-- MOBILE OVERLAY (CSS decides visibility on ≤900px) -->
     <div class="mobile-overlay @( _overlayOpen ? "open" : "" )" aria-hidden="@(!_overlayOpen)">
         <div class="mobile-overlay__backdrop" @onclick="CloseOverlay"></div>
         <div class="mobile-overlay__panel" role="dialog" aria-modal="true">
@@ -92,9 +92,10 @@ else
     private int _month;
     private int _selectedDay;
 
-    // Single UI flag (no JS)
-    private bool _overlayOpen = false;
+    // UI state: no JS — CSS shows overlay only on ≤900px
+    private bool _overlayOpen;
 
+    // Left panel calendar data
     private List<List<int?>> _weeks = new();
     private readonly string[] _weekdaysShort = new[] { "Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun" };
 
@@ -132,17 +133,20 @@ else
             .ToList() ?? new List<AstroEvent>();
     }
 
+    // Build Monday-first 7-column weeks
     private void BuildWeeks()
     {
         _weeks.Clear();
         var firstOfMonth = new DateTime(_year, _month, 1);
         var dim = DateTime.DaysInMonth(_year, _month);
+
         int mondayFirstIndex(int dow) => ((dow - (int)DayOfWeek.Monday) + 7) % 7;
         int startOffset = mondayFirstIndex((int)firstOfMonth.DayOfWeek);
 
         var days = Enumerable.Repeat<int?>(null, startOffset)
                              .Concat(Enumerable.Range(1, dim).Select(i => (int?)i))
                              .ToList();
+
         int pad = (7 - (days.Count % 7)) % 7;
         if (pad > 0) days.AddRange(Enumerable.Repeat<int?>(null, pad));
 
@@ -155,9 +159,8 @@ else
         _selectedDay = day;
         _current = new DateTime(_year, _month, _selectedDay);
 
-        // Open overlay only on mobile
-        bool isMobile = await JS.InvokeAsync<bool>("ui.isMobile");
-        _overlayOpen = isMobile;
+        // Always set true; CSS shows only on ≤900px
+        _overlayOpen = true;
 
         await InvokeAsync(StateHasChanged);
     }
@@ -182,19 +185,20 @@ else
 
     private void CloseOverlay() => _overlayOpen = false;
 
+    // Shared right panel content
     private RenderFragment RightPanelContent() => __builder =>
     {
-        __builder.AddMarkupContent(0, $"<div class=\"row month-row\">{_current.ToString("MMMM yyyy", CultureInfo.InvariantCulture)}</div>");
-        __builder.AddMarkupContent(1, $"<div class=\"row daynum-row\">{_current.Day}</div>");
-        __builder.AddMarkupContent(2, $"<div class=\"row weekday-row\">{_current.ToString("dddd", CultureInfo.InvariantCulture)}</div>");
+        __builder.AddMarkupContent(0, $"<div class=\"day-layout month-row\">{_current.ToString("MMMM yyyy", CultureInfo.InvariantCulture)}</div>");
+        __builder.AddMarkupContent(1, $"<div class=\"day-layout daynum-row\">{_current.Day}</div>");
+        __builder.AddMarkupContent(2, $"<div class=\"day-layout weekday-row\">{_current.ToString("dddd", CultureInfo.InvariantCulture)}</div>");
 
         var mo = _monthEvents.FirstOrDefault(x => x.Date.Date == _current.Date);
         string? moonDayIcon = mo?.MoonDay is not null ? GetMoonDayName((int)mo.MoonDay.NewMoonDay).ToLower() : null;
 
         if (!string.IsNullOrEmpty(moonDayIcon))
-            __builder.AddMarkupContent(3, $"<div class=\"row moonday-row\"><img alt=\"Moon Day\" src=\"img/zodiac/{moonDayIcon}.png\" width=\"64\" height=\"64\" /></div>");
+            __builder.AddMarkupContent(3, $"<div class=\"day-layout moonday-row\"><img alt=\"Moon Day\" src=\"img/zodiac/{moonDayIcon}.png\" width=\"64\" height=\"64\" /></div>");
         else
-            __builder.AddMarkupContent(4, "<div class=\"row moonday-row\"><span class=\"muted\">No Moon-day symbol</span></div>");
+            __builder.AddMarkupContent(4, "<div class=\"day-layout moonday-row\"><span class=\"muted\">No Moon-day symbol</span></div>");
 
         var dayEvents = DayEvents.ToList();
         var first = dayEvents.FirstOrDefault();
@@ -232,7 +236,7 @@ else
         }
         else
         {
-            __builder.AddMarkupContent(7, "<div class=\"muted\">No events on this day.</div>");
+            __builder.AddMarkupContent(7, "<div class=\"day-layout\">No events on this day.</div>");
         }
     };
 }

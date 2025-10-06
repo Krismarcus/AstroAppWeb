@@ -11,6 +11,18 @@
 <body>
     <div id="app">Loading...</div>
     <script src="_framework/blazor.webassembly.js"></script>
-    <script src="js/responsive.js"></script>
+    <script>
+        // Small screen only:
+        // window.ui = { isMobile: () => window.innerWidth <= 900 };
+
+        // Better: small screen + touch device (prevents narrow desktop from opening):
+        window.ui = {
+            shouldUseOverlay: function () {
+                const small = window.innerWidth <= 900;
+                const touch = navigator.maxTouchPoints > 0 || matchMedia("(pointer: coarse)").matches;
+                return small && touch;
+            }
+        };
+    </script>
 </body>
 </html>
