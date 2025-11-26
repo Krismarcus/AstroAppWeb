@@ -1,0 +1,184 @@
+@page "/admin"
+@using System.Linq
+@using Astrodaiva.Data.Models
+@using Astrodaiva.Data.Enums
+@using Astrodaiva.Blazor.Services
+@inject AstroDbEditService Editor
+
+<h2 style="text-align:center;">Admin – AstroEvents</h2>
+
+<div class="date-nav">
+    <button @onclick="PrevDay">◀</button>
+    <input type="date"
+           value="@_selectedDate.ToString("yyyy-MM-dd")"
+           @onchange="OnDateChanged" />
+    <button @onclick="NextDay">▶</button>
+</div>
+
+@if (_loading)
+{
+    <p>Loading astrodb.json…</p>
+}
+else if (!string.IsNullOrEmpty(_error))
+{
+    <p class="admin-error">@_error</p>
+}
+else if (_eventsForDay is not null)
+{
+    @foreach (var ev in _eventsForDay)
+    {
+        <div class="event-card">
+            <h3 style="text-align:center;">@ev.Date.ToString("yyyy-MM-dd")</h3>
+
+            <div class="moonday-box">
+                <h4>Moon Day</h4>
+                <div><b>New:</b> @ev.MoonDay.NewMoonDay (@GetMoonDaySymbol(ev.MoonDay.NewMoonDay))</div>
+                <div><b>Middle:</b> @ev.MoonDay.MiddleMoonDay (@GetMoonDaySymbol(ev.MoonDay.MiddleMoonDay))</div>
+                <div><b>Previous:</b> @ev.MoonDay.PreviousMoonDay (@GetMoonDaySymbol(ev.MoonDay.PreviousMoonDay))</div>
+                <div><b>Transition:</b> @ev.MoonDay.TransitionTime</div>
+                <div><b>Middle Transition:</b> @ev.MoonDay.MiddleMoonDayTransitionTime</div>
+                <div><b>Triple:</b> @(ev.MoonDay.IsTripleMoonDay ? "Yes" : "No")</div>
+            </div>
+
+            <div class="planet-grid">
+                @RenderPlanet("Sun", ev.SunInZodiac)
+                @RenderPlanet("Moon", ev.MoonInZodiac)
+                @RenderPlanet("Mercury", ev.MercuryInZodiac)
+                @RenderPlanet("Venus", ev.VenusInZodiac)
+                @RenderPlanet("Mars", ev.MarsInZodiac)
+                @RenderPlanet("Jupiter", ev.JupiterInZodiac)
+                @RenderPlanet("Saturn", ev.SaturnInZodiac)
+                @RenderPlanet("Uranus", ev.UranusInZodiac)
+                @RenderPlanet("Neptune", ev.NeptuneInZodiac)
+                @RenderPlanet("Pluto", ev.PlutoInZodiac)
+                @RenderPlanet("Selena", ev.SelenaInZodiac)
+                @RenderPlanet("Lilith", ev.LilithInZodiac)
+                @RenderPlanet("Rahu", ev.RahuInZodiac)
+                @RenderPlanet("Ketu", ev.KetuInZodiac)
+            </div>
+
+            <div class="activities-box">
+                <h4>Activities</h4>
+                @RenderActivity("Important tasks", ev.ImportantTasks)
+                @RenderActivity("Contracts", ev.Contracts)
+                @RenderActivity("Meetings", ev.Meetings)
+                @RenderActivity("Love", ev.Love)
+                @RenderActivity("Buy stuff", ev.Buystuff)
+                @RenderActivity("Beauty", ev.Beauty)
+                @RenderActivity("Barber", ev.Barber)
+                @RenderActivity("Gardening", ev.Gardening)
+                @RenderActivity("New ideas", ev.NewIdeas)
+                @RenderActivity("Tech", ev.Tech)
+                @RenderActivity("Travel", ev.Travel)
+            </div>
+
+        </div>
+    }
+}
+
+@code {
+    private bool _loading = true;
+    private string _error = string.Empty;
+    private DateTime _selectedDate = DateTime.Today;
+    private List<AstroEvent>? _eventsForDay;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            await Editor.EnsureLoadedAsync();
+        }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+        }
+        _loading = false;
+    }
+
+    private void PrevDay()
+    {
+        _selectedDate = _selectedDate.AddDays(-1);
+        LoadByDate();
+    }
+
+    private void NextDay()
+    {
+        _selectedDate = _selectedDate.AddDays(1);
+        LoadByDate();
+    }
+
+    private void OnDateChanged(ChangeEventArgs e)
+    {
+        if (DateTime.TryParse(e.Value?.ToString(), out var date))
+        {
+            _selectedDate = date;
+            LoadByDate();
+        }
+    }
+
+    private void LoadByDate()
+    {
+        if (Editor.Db?.AstroEventsDB is null)
+        {
+            _error = "Database not loaded.";
+            return;
+        }
+
+        _eventsForDay = Editor.Db.AstroEventsDB
+            .Where(e => e.Date.Date == _selectedDate.Date)
+            .OrderBy(e => e.Date)
+            .ToList();
+    }
+
+    private MoonDaySymbol GetMoonDaySymbol(int day)
+    {
+        if (day < 1 || day > 30)
+            return MoonDaySymbol.None;
+        return (MoonDaySymbol)day;
+    }
+
+    RenderFragment RenderPlanet(string name, PlanetInZodiac p) => builder =>
+    {
+        builder.OpenElement(0, "div");
+        builder.AddAttribute(1, "class", "planet-card");
+        builder.AddContent(2, $"[{name}] New: {p.NewZodiacSign}, Prev: {p.PreviousZodiacSign}");
+        builder.AddMarkupContent(3, "<br/>");
+        builder.AddContent(4, $"Retrograde: {(p.IsRetrograde ? "Yes" : "No")}");
+        builder.AddMarkupContent(5, "<br/>");
+        builder.AddContent(6, $"Transitioning: {(p.IsZodiacTransitioning ? "Yes" : "No")}");
+        builder.AddMarkupContent(7, "<br/>");
+        builder.AddContent(8, $"Time: {p.TransitionTime}");
+        builder.CloseElement();
+    };
+
+    RenderFragment RenderActivity(string name, ActivityQuality q) => builder =>
+    {
+        builder.OpenElement(0, "div");
+        builder.AddAttribute(1, "class", $"activity-item {GetQualityClass(q)}");
+        builder.AddContent(2, $"{name}: {q}");
+        builder.CloseElement();
+    };
+
+    private string GetQualityClass(ActivityQuality q) =>
+        q switch {
+            ActivityQuality.Good => "good",
+            ActivityQuality.Bad => "bad",
+            ActivityQuality.Neutral => "neutral",
+            _ => "none"
+        };    
+}
+
+<style>
+.date-nav { display:flex; justify-content:center; gap:10px; margin-bottom:10px; }
+.admin-error { color:red; }
+.event-card { border:1px solid #ccc; padding:10px; margin-bottom:10px; border-radius:6px; }
+.moonday-box { background:#eef7ff; padding:6px; margin-bottom:10px; border-radius:4px; }
+.planet-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:8px; }
+.planet-card { background:#fafafa; border:1px solid #ddd; padding:6px; border-radius:4px; font-size:0.8rem; }
+.activities-box { margin-top:10px; padding:6px; background:#f8f8f8; border-radius:4px; }
+.activity-item { padding:4px; border:1px solid #bbb; margin:2px 0; border-radius:4px; }
+.good { background:#d8f5d8; }
+.bad { background:#ffd6d6; }
+.neutral { background:#fff4bf; }
+.none { background:#eee; }
+</style>
