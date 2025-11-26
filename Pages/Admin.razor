@@ -3,16 +3,42 @@
 @using Astrodaiva.Data.Models
 @using Astrodaiva.Data.Enums
 @using Astrodaiva.Blazor.Services
+@using Microsoft.JSInterop
+@using Microsoft.AspNetCore.Components
+@using System.Text.Json
+
 @inject AstroDbEditService Editor
+@inject IJSRuntime JS
 
-<h2 style="text-align:center;">Admin – AstroEvents</h2>
+<h2 class="admin-title">Admin – AstroEvents</h2>
 
-<div class="date-nav">
-    <button @onclick="PrevDay">◀</button>
-    <input type="date"
-           value="@_selectedDate.ToString("yyyy-MM-dd")"
-           @onchange="OnDateChanged" />
-    <button @onclick="NextDay">▶</button>
+<div class="admin-toolbar">
+    <div class="date-nav">
+        <button type="button" @onclick="PrevDay">◀</button>
+
+        <input type="date"
+               value="@_selectedDate.ToString("yyyy-MM-dd")"
+               @onchange="OnDateChanged" />
+
+        <button type="button" @onclick="NextDay">▶</button>
+    </div>
+
+    <div class="admin-actions">
+        <button type="button" class="save-btn" @onclick="SaveWithConfirm">💾 Save JSON</button>
+        <button type="button" class="revert-btn" @onclick="RevertChanges">⟲ Revert</button>
+
+        <span class="save-indicator">
+            @if (_hasChanges)
+            {
+                <span class="unsaved-dot">●</span>
+                <span>@_changeCount change@(_changeCount == 1 ? "" : "s")</span>
+            }
+            else
+            {
+                <span class="saved-check">✓ All saved</span>
+            }
+        </span>
+    </div>
 </div>
 
 @if (_loading)
@@ -23,55 +49,109 @@ else if (!string.IsNullOrEmpty(_error))
 {
     <p class="admin-error">@_error</p>
 }
-else if (_eventsForDay is not null)
+else if (_eventsForDay is null || _eventsForDay.Count == 0)
+{
+    <p>No events found for @_selectedDate.ToString("yyyy-MM-dd").</p>
+}
+else
 {
     @foreach (var ev in _eventsForDay)
     {
         <div class="event-card">
-            <h3 style="text-align:center;">@ev.Date.ToString("yyyy-MM-dd")</h3>
+            <h3 class="event-date">@ev.Date.ToString("yyyy-MM-dd")</h3>
+
+            @if (!string.IsNullOrWhiteSpace(ev.EventText))
+            {
+                <div class="event-text">@ev.EventText</div>
+            }
 
             <div class="moonday-box">
                 <h4>Moon Day</h4>
-                <div><b>New:</b> @ev.MoonDay.NewMoonDay (@GetMoonDaySymbol(ev.MoonDay.NewMoonDay))</div>
-                <div><b>Middle:</b> @ev.MoonDay.MiddleMoonDay (@GetMoonDaySymbol(ev.MoonDay.MiddleMoonDay))</div>
-                <div><b>Previous:</b> @ev.MoonDay.PreviousMoonDay (@GetMoonDaySymbol(ev.MoonDay.PreviousMoonDay))</div>
-                <div><b>Transition:</b> @ev.MoonDay.TransitionTime</div>
-                <div><b>Middle Transition:</b> @ev.MoonDay.MiddleMoonDayTransitionTime</div>
-                <div><b>Triple:</b> @(ev.MoonDay.IsTripleMoonDay ? "Yes" : "No")</div>
+                <div class="moonday-grid">
+                    <label>
+                        New:
+                        <select @onchange="@(e => SetMoonDayNumber(ev, e))">
+                            @for (int i = 1; i <= 30; i++)
+                            {
+                                <option value="@i" selected="@(ev.MoonDay.NewMoonDay == i)">
+                                    @i – @GetMoonDaySymbol(i)
+                                </option>
+                            }
+                        </select>
+                    </label>
+
+                    <label>
+                        Middle:
+                        <select disabled>
+                            <option>
+                                @ev.MoonDay.MiddleMoonDay – @GetMoonDaySymbol(ev.MoonDay.MiddleMoonDay)
+                            </option>
+                        </select>
+                    </label>
+
+                    <label>
+                        Previous:
+                        <select disabled>
+                            <option>
+                                @ev.MoonDay.PreviousMoonDay – @GetMoonDaySymbol(ev.MoonDay.PreviousMoonDay)
+                            </option>
+                        </select>
+                    </label>
+
+                    <label>
+                        Triple:
+                        @BoolIcon(ev.MoonDay.IsTripleMoonDay, v => { ev.MoonDay.IsTripleMoonDay = v; MarkChanged(); })
+                    </label>
+
+                    <label>
+                        Transition:
+                        <input type="datetime-local"
+                               value="@ToLocalInput(ev.MoonDay.TransitionTime)"
+                               @onchange="@((ChangeEventArgs e) => { SetMoonTransition(ev, e, false); MarkChanged(); })" />
+                    </label>
+
+                    <label>
+                        Middle transition:
+                        <input type="datetime-local"
+                               value="@ToLocalInput(ev.MoonDay.MiddleMoonDayTransitionTime)"
+                               @onchange="@((ChangeEventArgs e) => { SetMoonTransition(ev, e, true); MarkChanged(); })" />
+                    </label>
+                </div>
             </div>
 
             <div class="planet-grid">
-                @RenderPlanet("Sun", ev.SunInZodiac)
-                @RenderPlanet("Moon", ev.MoonInZodiac)
-                @RenderPlanet("Mercury", ev.MercuryInZodiac)
-                @RenderPlanet("Venus", ev.VenusInZodiac)
-                @RenderPlanet("Mars", ev.MarsInZodiac)
-                @RenderPlanet("Jupiter", ev.JupiterInZodiac)
-                @RenderPlanet("Saturn", ev.SaturnInZodiac)
-                @RenderPlanet("Uranus", ev.UranusInZodiac)
-                @RenderPlanet("Neptune", ev.NeptuneInZodiac)
-                @RenderPlanet("Pluto", ev.PlutoInZodiac)
-                @RenderPlanet("Selena", ev.SelenaInZodiac)
-                @RenderPlanet("Lilith", ev.LilithInZodiac)
-                @RenderPlanet("Rahu", ev.RahuInZodiac)
-                @RenderPlanet("Ketu", ev.KetuInZodiac)
+                @RenderPlanetEditor("Sun", ev.SunInZodiac)
+                @RenderPlanetEditor("Moon", ev.MoonInZodiac)
+                @RenderPlanetEditor("Mercury", ev.MercuryInZodiac)
+                @RenderPlanetEditor("Venus", ev.VenusInZodiac)
+                @RenderPlanetEditor("Mars", ev.MarsInZodiac)
+                @RenderPlanetEditor("Jupiter", ev.JupiterInZodiac)
+                @RenderPlanetEditor("Saturn", ev.SaturnInZodiac)
+                @RenderPlanetEditor("Uranus", ev.UranusInZodiac)
+                @RenderPlanetEditor("Neptune", ev.NeptuneInZodiac)
+                @RenderPlanetEditor("Pluto", ev.PlutoInZodiac)
+                @RenderPlanetEditor("Selena", ev.SelenaInZodiac)
+                @RenderPlanetEditor("Lilith", ev.LilithInZodiac)
+                @RenderPlanetEditor("Rahu", ev.RahuInZodiac)
+                @RenderPlanetEditor("Ketu", ev.KetuInZodiac)
             </div>
 
             <div class="activities-box">
                 <h4>Activities</h4>
-                @RenderActivity("Important tasks", ev.ImportantTasks)
-                @RenderActivity("Contracts", ev.Contracts)
-                @RenderActivity("Meetings", ev.Meetings)
-                @RenderActivity("Love", ev.Love)
-                @RenderActivity("Buy stuff", ev.Buystuff)
-                @RenderActivity("Beauty", ev.Beauty)
-                @RenderActivity("Barber", ev.Barber)
-                @RenderActivity("Gardening", ev.Gardening)
-                @RenderActivity("New ideas", ev.NewIdeas)
-                @RenderActivity("Tech", ev.Tech)
-                @RenderActivity("Travel", ev.Travel)
+                <div class="activities-grid">
+                    @RenderActivityEditor("Important tasks", ev.ImportantTasks, v => { ev.ImportantTasks = v; MarkChanged(); })
+                    @RenderActivityEditor("Contracts", ev.Contracts, v => { ev.Contracts = v; MarkChanged(); })
+                    @RenderActivityEditor("Meetings", ev.Meetings, v => { ev.Meetings = v; MarkChanged(); })
+                    @RenderActivityEditor("Love", ev.Love, v => { ev.Love = v; MarkChanged(); })
+                    @RenderActivityEditor("Buy stuff", ev.Buystuff, v => { ev.Buystuff = v; MarkChanged(); })
+                    @RenderActivityEditor("Beauty", ev.Beauty, v => { ev.Beauty = v; MarkChanged(); })
+                    @RenderActivityEditor("Barber", ev.Barber, v => { ev.Barber = v; MarkChanged(); })
+                    @RenderActivityEditor("Gardening", ev.Gardening, v => { ev.Gardening = v; MarkChanged(); })
+                    @RenderActivityEditor("New ideas", ev.NewIdeas, v => { ev.NewIdeas = v; MarkChanged(); })
+                    @RenderActivityEditor("Tech", ev.Tech, v => { ev.Tech = v; MarkChanged(); })
+                    @RenderActivityEditor("Travel", ev.Travel, v => { ev.Travel = v; MarkChanged(); })
+                </div>
             </div>
-
         </div>
     }
 }
@@ -79,21 +159,62 @@ else if (_eventsForDay is not null)
 @code {
     private bool _loading = true;
     private string _error = string.Empty;
+
     private DateTime _selectedDate = DateTime.Today;
     private List<AstroEvent>? _eventsForDay;
 
+    // ----- CHANGE TRACKING -----
+    private bool _hasChanges = false;
+    private int _changeCount = 0;
+
+    // Keeps original JSON for revert
+    private AppDB? _originalDbClone;
+
+    private void MarkChanged()
+    {
+        _hasChanges = true;
+        _changeCount++;
+    }
+
     protected override async Task OnInitializedAsync()
     {
+        _loading = true;
+        _error = string.Empty;
+
         try
         {
-            await Editor.EnsureLoadedAsync();
+            // ALWAYS load fresh JSON
+            var db = await Editor.ForceReloadAsync();
+
+            if (db?.AstroEventsDB is null || db.AstroEventsDB.Count == 0)
+            {
+                _error = "AstroEventsDB is empty or missing.";
+                _loading = false;
+                return;
+            }
+
+            // Backup original JSON for revert
+            _originalDbClone = DeepClone(db);
+
+            // Ensure selected date exists
+            if (!db.AstroEventsDB.Any(e => e.Date.Date == _selectedDate.Date))
+                _selectedDate = db.AstroEventsDB.OrderBy(e => e.Date).First().Date;
+
+            LoadByDate();
+
+            // Clean state
+            _hasChanges = false;
+            _changeCount = 0;
         }
         catch (Exception ex)
         {
-            _error = ex.Message;
+            _error = "Could not load astrodb.json: " + ex.Message;
         }
+
         _loading = false;
     }
+
+    // ----- DATE NAVIGATION -----
 
     private void PrevDay()
     {
@@ -109,9 +230,9 @@ else if (_eventsForDay is not null)
 
     private void OnDateChanged(ChangeEventArgs e)
     {
-        if (DateTime.TryParse(e.Value?.ToString(), out var date))
+        if (DateTime.TryParse(e.Value?.ToString(), out var d))
         {
-            _selectedDate = date;
+            _selectedDate = d;
             LoadByDate();
         }
     }
@@ -120,65 +241,503 @@ else if (_eventsForDay is not null)
     {
         if (Editor.Db?.AstroEventsDB is null)
         {
+            _eventsForDay = null;
             _error = "Database not loaded.";
             return;
         }
 
+        _error = string.Empty;
+
+        // NEVER clone events; use original references
         _eventsForDay = Editor.Db.AstroEventsDB
             .Where(e => e.Date.Date == _selectedDate.Date)
             .OrderBy(e => e.Date)
-            .ToList();
+            .ToList(); // list is OK — objects remain same references
     }
+
+    // ----- MOONDAY EDITING -----
+
+    private void SetMoonDayNumber(AstroEvent ev, ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out int n) && n >= 1 && n <= 30)
+        {
+            ev.MoonDay.NewMoonDay = n;
+            MarkChanged();
+        }
+    }
+
+    private void SetMoonTransition(AstroEvent ev, ChangeEventArgs e, bool isMiddle)
+    {
+        if (DateTime.TryParse(e.Value?.ToString(), out var dt))
+        {
+            if (isMiddle)
+                ev.MoonDay.MiddleMoonDayTransitionTime = dt;
+            else
+                ev.MoonDay.TransitionTime = dt;
+
+            MarkChanged();
+        }
+    }
+
+    private string ToLocalInput(DateTime dt)
+        => dt == default ? "" : dt.ToString("yyyy-MM-ddTHH:mm");
+
 
     private MoonDaySymbol GetMoonDaySymbol(int day)
     {
         if (day < 1 || day > 30)
             return MoonDaySymbol.None;
+
         return (MoonDaySymbol)day;
     }
 
-    RenderFragment RenderPlanet(string name, PlanetInZodiac p) => builder =>
+
+    // ----- SAVING -----
+
+    public void Dispose()
     {
-        builder.OpenElement(0, "div");
-        builder.AddAttribute(1, "class", "planet-card");
-        builder.AddContent(2, $"[{name}] New: {p.NewZodiacSign}, Prev: {p.PreviousZodiacSign}");
-        builder.AddMarkupContent(3, "<br/>");
-        builder.AddContent(4, $"Retrograde: {(p.IsRetrograde ? "Yes" : "No")}");
-        builder.AddMarkupContent(5, "<br/>");
-        builder.AddContent(6, $"Transitioning: {(p.IsZodiacTransitioning ? "Yes" : "No")}");
-        builder.AddMarkupContent(7, "<br/>");
-        builder.AddContent(8, $"Time: {p.TransitionTime}");
+        Editor.ClearDb();
+    }
+
+    private async Task SaveWithConfirm()
+    {
+        if (Editor.Db is null)
+        {
+            _error = "Nothing to save – database not loaded.";
+            return;
+        }
+
+        var confirm = await JS.InvokeAsync<bool>("confirm", "Save changes to astrodb.json?");
+        if (!confirm) return;
+
+        try
+        {
+            await Editor.SaveAsync();
+
+            // Reset flags
+            _hasChanges = false;
+            _changeCount = 0;
+
+            // Reset original snapshot
+            _originalDbClone = DeepClone(Editor.Db);
+        }
+        catch (Exception ex)
+        {
+            _error = "Error saving JSON: " + ex.Message;
+        }
+    }
+
+
+    // ----- REVERT -----
+
+    private async Task RevertChanges()
+    {
+        if (_originalDbClone is null)
+        {
+            _error = "No original snapshot available.";
+            return;
+        }
+
+        var confirm = await JS.InvokeAsync<bool>("confirm",
+            "Discard all changes and restore original JSON?");
+        if (!confirm) return;
+
+        Editor.ReplaceDb(DeepClone(_originalDbClone));
+
+        // Reload UI
+        LoadByDate();
+
+        _hasChanges = false;
+        _changeCount = 0;
+    }
+
+
+    // ----- DEEP CLONE -----
+    // Uses JSON to create a clean deep copy of AppDB.
+    private T DeepClone<T>(T source)
+    {
+        var json = JsonSerializer.Serialize(source);
+        return JsonSerializer.Deserialize<T>(json)!;
+    }
+
+
+    // ----- PLANET EDITOR RENDERING -----
+
+    RenderFragment RenderPlanetEditor(string name, PlanetInZodiac p) => builder =>
+    {
+        var seq = 0;
+
+        builder.OpenElement(seq++, "div");
+        builder.AddAttribute(seq++, "class", "planet-card");
+
+        // Planet Name
+        builder.OpenElement(seq++, "div");
+        builder.AddAttribute(seq++, "class", "planet-name");
+        builder.AddContent(seq++, name);
         builder.CloseElement();
+
+        // ----- Zodiac Sign -----
+        builder.OpenElement(seq++, "label");
+        builder.AddContent(seq++, "Sign:");
+
+        builder.OpenElement(seq++, "select");
+        builder.AddAttribute(seq++, "value", p.NewZodiacSign);
+        builder.AddAttribute(seq++, "onchange",
+            EventCallback.Factory.Create<ChangeEventArgs>(this, e =>
+        {
+            if (Enum.TryParse<ZodiacSign>(e.Value?.ToString(), out var sign))
+            {
+                p.NewZodiacSign = sign;
+                MarkChanged();
+            }
+        }));
+
+        foreach (var sign in Enum.GetValues<ZodiacSign>())
+        {
+            builder.OpenElement(seq++, "option");
+            builder.AddAttribute(seq++, "value", sign);
+            if (sign.Equals(p.NewZodiacSign))
+                builder.AddAttribute(seq++, "selected", "selected");
+
+            builder.AddContent(seq++, sign.ToString());
+            builder.CloseElement();
+        }
+        builder.CloseElement(); // select
+        builder.CloseElement(); // label
+
+
+        // ----- Retrograde -----
+        builder.OpenElement(seq++, "label");
+        builder.AddContent(seq++, "Retrograde:");
+        builder.AddContent(seq++, BoolIcon(p.IsRetrograde, v =>
+        {
+            p.IsRetrograde = v;
+            MarkChanged();
+        }));
+        builder.CloseElement();
+
+
+        // ----- Transition Toggle -----
+        builder.OpenElement(seq++, "label");
+        builder.AddContent(seq++, "Transition:");
+        builder.AddContent(seq++, BoolIcon(p.IsZodiacTransitioning, v =>
+        {
+            p.IsZodiacTransitioning = v;
+            MarkChanged();
+        }));
+        builder.CloseElement();
+
+
+        // ----- CONDITIONAL TRANSITION TIME -----
+        if (p.IsZodiacTransitioning)
+        {
+            builder.OpenElement(seq++, "label");
+            builder.AddContent(seq++, "Transition Time:");
+
+            builder.OpenElement(seq++, "input");
+            builder.AddAttribute(seq++, "type", "datetime-local");
+            builder.AddAttribute(seq++, "value", ToLocalInput(p.TransitionTime));
+            builder.AddAttribute(seq++, "onchange",
+                EventCallback.Factory.Create<ChangeEventArgs>(this, e =>
+            {
+                if (DateTime.TryParse(e.Value?.ToString(), out var dt))
+                {
+                    p.TransitionTime = dt;
+                    MarkChanged();
+                }
+            }));
+            builder.CloseElement(); // input
+
+            builder.CloseElement(); // label
+        }
+
+        builder.CloseElement(); // .planet-card
     };
 
-    RenderFragment RenderActivity(string name, ActivityQuality q) => builder =>
+
+    // ----- ACTIVITY EDITOR RENDERING -----
+
+    RenderFragment RenderActivityEditor(string name, ActivityQuality value, Action<ActivityQuality> setter)
+        => builder =>
     {
-        builder.OpenElement(0, "div");
-        builder.AddAttribute(1, "class", $"activity-item {GetQualityClass(q)}");
-        builder.AddContent(2, $"{name}: {q}");
+        var seq = 0;
+
+        builder.OpenElement(seq++, "div");
+        builder.AddAttribute(seq++, "class", $"activity-item {GetQualityClass(value)}");
+
+        // Activity name
+        builder.OpenElement(seq++, "span");
+        builder.AddAttribute(seq++, "class", "activity-label");
+        builder.AddContent(seq++, name + ": ");
         builder.CloseElement();
+
+        // Dropdown
+        builder.OpenElement(seq++, "select");
+        builder.AddAttribute(seq++, "value", value);
+        builder.AddAttribute(seq++, "onchange",
+            EventCallback.Factory.Create<ChangeEventArgs>(this, e =>
+        {
+            if (Enum.TryParse<ActivityQuality>(e.Value?.ToString(), out var aq))
+            {
+                setter(aq);
+                MarkChanged();
+            }
+        }));
+
+        foreach (var aq in Enum.GetValues<ActivityQuality>())
+        {
+            builder.OpenElement(seq++, "option");
+            builder.AddAttribute(seq++, "value", aq);
+            if (aq.Equals(value))
+                builder.AddAttribute(seq++, "selected", "selected");
+            builder.AddContent(seq++, aq.ToString());
+            builder.CloseElement();
+        }
+
+        builder.CloseElement(); // select
+
+        builder.CloseElement(); // div
     };
+
+
+    // ----- QUALITY CLASS (BACKGROUND COLORS) -----
 
     private string GetQualityClass(ActivityQuality q) =>
-        q switch {
+        q switch
+        {
             ActivityQuality.Good => "good",
             ActivityQuality.Bad => "bad",
             ActivityQuality.Neutral => "neutral",
             _ => "none"
-        };    
-}
+        };
 
+
+    // ----- COLORED BOOLEAN ICON (✔ / ✖) -----
+
+    private RenderFragment BoolIcon(bool value, Action<bool> setter) => builder =>
+    {
+        var seq = 0;
+
+        builder.OpenElement(seq++, "span");
+        builder.AddAttribute(seq++, "class", $"bool-icon {(value ? "true" : "false")}");
+        builder.AddAttribute(seq++, "onclick",
+            EventCallback.Factory.Create(this, () =>
+        {
+            setter(!value);
+            MarkChanged();
+        }));
+
+        builder.AddContent(seq++, value ? "✔" : "✖");
+        builder.CloseElement();
+    };
+}
 <style>
-.date-nav { display:flex; justify-content:center; gap:10px; margin-bottom:10px; }
-.admin-error { color:red; }
-.event-card { border:1px solid #ccc; padding:10px; margin-bottom:10px; border-radius:6px; }
-.moonday-box { background:#eef7ff; padding:6px; margin-bottom:10px; border-radius:4px; }
-.planet-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:8px; }
-.planet-card { background:#fafafa; border:1px solid #ddd; padding:6px; border-radius:4px; font-size:0.8rem; }
-.activities-box { margin-top:10px; padding:6px; background:#f8f8f8; border-radius:4px; }
-.activity-item { padding:4px; border:1px solid #bbb; margin:2px 0; border-radius:4px; }
-.good { background:#d8f5d8; }
-.bad { background:#ffd6d6; }
-.neutral { background:#fff4bf; }
-.none { background:#eee; }
+    /* ----- TITLE ----- */
+    .admin-title {
+        text-align: center;
+        margin-bottom: 0.5rem;
+    }
+
+    /* ----- TOOLBAR ----- */
+    .admin-toolbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 0.5rem;
+        margin-bottom: 0.5rem;
+        flex-wrap: wrap;
+    }
+
+    .admin-actions {
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    /* ----- DATE NAVIGATION ----- */
+    .date-nav {
+        display: flex;
+        align-items: center;
+        gap: 0.25rem;
+    }
+
+        .date-nav input[type="date"] {
+            padding: 2px 4px;
+            font-size: 0.9rem;
+        }
+
+    /* ----- BUTTONS ----- */
+    .save-btn,
+    .revert-btn {
+        padding: 4px 10px;
+        font-size: 0.85rem;
+        cursor: pointer;
+    }
+
+    .revert-btn {
+        background: #eee;
+    }
+
+    .save-btn {
+        background: #e8f5e9;
+    }
+
+    /* ----- SAVE INDICATOR ----- */
+    .save-indicator {
+        font-size: 0.85rem;
+        user-select: none;
+    }
+
+    .unsaved-dot {
+        color: #e74c3c;
+        font-weight: bold;
+    }
+
+    .saved-check {
+        color: #2ecc71;
+        font-weight: bold;
+    }
+
+    /* ----- ERRORS ----- */
+    .admin-error {
+        color: #b00020;
+        font-weight: 500;
+    }
+
+    /* ----- EVENT CARD ----- */
+    .event-card {
+        border: 1px solid #ccc;
+        border-radius: 6px;
+        padding: 6px 8px;
+        margin-bottom: 6px;
+        font-size: 0.85rem;
+    }
+
+    .event-date {
+        text-align: center;
+        margin: 0 0 4px 0;
+    }
+
+    .event-text {
+        font-style: italic;
+        margin-bottom: 4px;
+    }
+
+    /* ----- MOONDAY ----- */
+    .moonday-box {
+        background: #eef7ff;
+        padding: 4px 6px;
+        border-radius: 4px;
+        margin-bottom: 6px;
+    }
+
+    .moonday-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 4px;
+        font-size: 0.8rem;
+    }
+
+        .moonday-grid label {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+    .moonday-symbol {
+        font-style: italic;
+        color: #555;
+    }
+
+    /* ----- PLANET GRID (7 COLUMNS) ----- */
+    .planet-grid {
+        display: grid;
+        grid-template-columns: repeat(7, minmax(140px, 1fr));
+        gap: 4px;
+        margin-bottom: 6px;
+    }
+
+    .planet-card {
+        background: #fafafa;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        padding: 4px;
+        font-size: 0.8rem;
+    }
+
+        .planet-card label {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 4px;
+        }
+
+    .planet-name {
+        font-weight: 600;
+        margin-bottom: 2px;
+    }
+
+    /* ----- ACTIVITIES ----- */
+    .activities-box {
+        margin-top: 4px;
+        padding: 4px 6px;
+        background: #f8f8f8;
+        border-radius: 4px;
+    }
+
+    .activities-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 4px;
+    }
+
+    .activity-item {
+        padding: 2px 4px;
+        border-radius: 4px;
+        border: 1px solid #bbb;
+        font-size: 0.8rem;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 4px;
+    }
+
+    .activity-label {
+        white-space: nowrap;
+    }
+
+    /* ----- QUALITY BACKGROUNDS ----- */
+    .good {
+        background: #d8f5d8;
+    }
+
+    .bad {
+        background: #ffd6d6;
+    }
+
+    .neutral {
+        background: #fff4bf;
+    }
+
+    .none {
+        background: #eee;
+    }
+
+    /* ----- BOOLEAN ICONS (✔ / ✖) ----- */
+    .bool-icon {
+        cursor: pointer;
+        font-weight: bold;
+        padding: 1px 5px;
+        border-radius: 4px;
+        font-size: 1rem;
+        user-select: none;
+    }
+
+        .bool-icon.true {
+            color: #2ecc71; /* green */
+        }
+
+        .bool-icon.false {
+            color: #e74c3c; /* red */
+        }
 </style>
