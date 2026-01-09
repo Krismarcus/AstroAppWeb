@@ -96,7 +96,10 @@ else
     @foreach (var ev in _eventsForDay)
     {
         <div class="event-card">
-            <h3 class="event-date">@ev.Date.ToString("yyyy-MM-dd")</h3>
+            <h3 class="event-date">
+                @ev.Date.ToString("yyyy-MM-dd")
+                <span class="phase-badge">@GetPhaseLabel(ev.MoonPhase)</span>
+            </h3>
 
             @{
                 var key = ev.Date.Date;
@@ -162,6 +165,17 @@ else
                     <label>
                         Triple:
                         @BoolIcon(ev.MoonDay.IsTripleMoonDay, v => { ev.MoonDay.IsTripleMoonDay = v; MarkChanged(); })
+                    </label>
+
+                    <label>
+                        Phase:
+                        <select @onchange="@(e => SetMoonPhase(ev, e))">
+                            <option value="0" selected="@(ev.MoonPhase == 0)">—</option>
+                            <option value="1" selected="@(ev.MoonPhase == 1)">New Moon (1)</option>
+                            <option value="2" selected="@(ev.MoonPhase == 2)">First Quarter (2)</option>
+                            <option value="3" selected="@(ev.MoonPhase == 3)">Full Moon (3)</option>
+                            <option value="4" selected="@(ev.MoonPhase == 4)">Third Quarter (4)</option>
+                        </select>
                     </label>
 
                     <label>
@@ -322,6 +336,28 @@ else
             .ToList(); // list is OK — objects remain same references
     }
 
+    // ----- MOON PHASE -----
+    private string GetPhaseLabel(int phase) => phase switch
+    {
+        1 => "🌑 New",
+        2 => "🌓 1Q",
+        3 => "🌕 Full",
+        4 => "🌗 3Q",
+        _ => "—"
+    };
+
+    private void SetMoonPhase(AstroEvent ev, ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out int p) && p >= 0 && p <= 4)
+        {
+            if (ev.MoonPhase != p)
+            {
+                ev.MoonPhase = p;
+                MarkChanged();
+            }
+        }
+    }
+
     // ----- MOONDAY EDITING -----
 
     private void SetMoonDayNumber(AstroEvent ev, ChangeEventArgs e)
@@ -400,6 +436,14 @@ else
                 changed++;
             }
 
+            // Set MoonPhase based on THIS day's moonday number
+            int phase = PhaseFromMoonDayNumber(current);
+            if (e.MoonPhase != phase)
+            {
+                e.MoonPhase = phase;
+                changed++;
+            }
+
             // Triple flag ONLY on the chosen triple day
             bool isTripleDay = _tripleDayOfMonth != 0 && e.Date.Day == _tripleDayOfMonth;
             if (e.MoonDay.IsTripleMoonDay != isTripleDay)
@@ -408,15 +452,13 @@ else
                 changed++;
             }
 
-            // IMPORTANT CHANGE:
             // skip happens on the day BEFORE triple day
             bool isSkipDay = _tripleDayOfMonth != 0 && e.Date.Day == (_tripleDayOfMonth - 1);
 
             // Advance to next day (normal +1)
             current = NextMoonDay(current, maxDay);
 
-            // If today is skip-day, jump one extra (+2 total),
-            // which skips the MoonDay number that would have been assigned on triple day.
+            // If today is skip-day, jump one extra (+2 total)
             if (isSkipDay)
                 current = NextMoonDay(current, maxDay);
         }
@@ -428,7 +470,6 @@ else
         StateHasChanged();
     }
 
-
     private static int NextMoonDay(int value, int maxDay)
         => value >= maxDay ? 1 : value + 1;
 
@@ -438,6 +479,22 @@ else
         _hasChanges = true;
         _changeCount += count;
     }
+
+    // ----- MOON PHASE LOGIC ----- //
+    private int PhaseFromMoonDayNumber(int moonDayNumber)
+    {
+        // Borders by your Avesta names:
+        // 1 Žibintas (Lantern) -> New (1)
+        // 9 Šikšnosparnis (Bat) -> FirstQuarter (2)
+        // 15 Gyvatė (Snake) -> Full (3)
+        // 23 Krokodilas (Crocodile) -> ThirdQuarter (4)
+
+        if (moonDayNumber >= 1 && moonDayNumber <= 8) return 1;     // New
+        if (moonDayNumber >= 9 && moonDayNumber <= 14) return 2;    // 1Q
+        if (moonDayNumber >= 15 && moonDayNumber <= 22) return 3;   // Full
+        return 4;                                                   // 3Q (23..29/30)
+    }
+
 
     // ----- CREATE NEW MONTH ----- //
     private async Task CreateNewMonthTemplate()
@@ -511,6 +568,7 @@ else
         {
             Date = date,
             EventText = "",
+            MoonPhase = 1,
 
             MoonDay = new MoonDay
             {
