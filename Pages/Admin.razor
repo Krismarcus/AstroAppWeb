@@ -6,6 +6,7 @@
 @using Microsoft.JSInterop
 @using Microsoft.AspNetCore.Components
 @using System.Text.Json
+@using System.Globalization
 
 @inject AstroDbEditService Editor
 @inject IJSRuntime JS
@@ -39,6 +40,39 @@
             }
         </span>
     </div>
+
+    <div class="month-moon-editor">
+        <div class="mme-row">
+            <label>MoonDay on 1st</label>
+            <select @bind="_moonDayOnFirst">
+                @for (int d = 1; d <= 30; d++)
+                {
+                    <option value="@d">
+                        @d – @GetMoonDaySymbol(d)
+                    </option>
+                }
+            </select>
+
+            <label>Triple day</label>
+            <select @bind="_tripleDayOfMonth">
+                <option value="0">—</option>
+                @for (int d = 1; d <= DateTime.DaysInMonth(_selectedDate.Year, _moonEditMonth); d++)
+                {
+                    <option value="@d">@d</option>
+                }
+            </select>
+
+            <label class="mme-check">
+                <input type="checkbox" @bind="_is29Cycle" />
+                29-day
+            </label>
+
+            <button type="button" class="apply-btn" @onclick="ApplyMoonDaysForMonth">
+                🌙 Apply month
+            </button>
+        </div>
+    </div>
+
 </div>
 
 @if (_loading)
@@ -170,6 +204,11 @@ else
     // Keeps original JSON for revert
     private AppDB? _originalDbClone;
 
+    private int _moonEditMonth => _selectedDate.Month; // keep month in sync with current selected date
+    private int _moonDayOnFirst = 1;                   // user chooses: MoonDay number for 1st day
+    private int _tripleDayOfMonth = 0;                 // 0 = none
+    private bool _is29Cycle = false;                   // false=30, true=29
+
     private void MarkChanged()
     {
         _hasChanges = true;
@@ -291,6 +330,86 @@ else
         return (MoonDaySymbol)day;
     }
 
+    private void ApplyMoonDaysForMonth()
+    {
+        if (Editor.Db?.AstroEventsDB is null)
+        {
+            _error = "Database not loaded.";
+            return;
+        }
+
+        int year = _selectedDate.Year;
+        int month = _selectedDate.Month;
+
+        // Safety: if triple day is invalid for this month, disable it
+        int dim = DateTime.DaysInMonth(year, month);
+        if (_tripleDayOfMonth > dim) _tripleDayOfMonth = 0;
+
+        int maxDay = _is29Cycle ? 29 : 30;
+
+        var monthEvents = Editor.Db.AstroEventsDB
+            .Where(e => e.Date.Year == year && e.Date.Month == month)
+            .OrderBy(e => e.Date)
+            .ToList();
+
+        if (monthEvents.Count == 0)
+        {
+            _error = $"No events found for {year}-{month:00}.";
+            return;
+        }
+
+        int current = _moonDayOnFirst;
+        int changed = 0;
+
+        foreach (var e in monthEvents)
+        {
+            e.MoonDay ??= new MoonDay();
+
+            // Set moonday number
+            if (e.MoonDay.NewMoonDay != current)
+            {
+                e.MoonDay.NewMoonDay = current;
+                changed++;
+            }
+
+            // Triple flag ONLY on the chosen triple day
+            bool isTripleDay = _tripleDayOfMonth != 0 && e.Date.Day == _tripleDayOfMonth;
+            if (e.MoonDay.IsTripleMoonDay != isTripleDay)
+            {
+                e.MoonDay.IsTripleMoonDay = isTripleDay;
+                changed++;
+            }
+
+            // IMPORTANT CHANGE:
+            // skip happens on the day BEFORE triple day
+            bool isSkipDay = _tripleDayOfMonth != 0 && e.Date.Day == (_tripleDayOfMonth - 1);
+
+            // Advance to next day (normal +1)
+            current = NextMoonDay(current, maxDay);
+
+            // If today is skip-day, jump one extra (+2 total),
+            // which skips the MoonDay number that would have been assigned on triple day.
+            if (isSkipDay)
+                current = NextMoonDay(current, maxDay);
+        }
+
+        if (changed > 0)
+            MarkChangedMany(changed);
+
+        LoadByDate();
+        StateHasChanged();
+    }
+
+
+    private static int NextMoonDay(int value, int maxDay)
+        => value >= maxDay ? 1 : value + 1;
+
+    private void MarkChangedMany(int count)
+    {
+        if (count <= 0) return;
+        _hasChanges = true;
+        _changeCount += count;
+    }
 
     // ----- SAVING -----
 
@@ -648,6 +767,46 @@ else
         font-style: italic;
         color: #555;
     }
+
+    .month-moon-editor {
+    width: 100%;
+    margin-top: 6px;
+}
+
+.mme-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+    justify-content: flex-start;
+}
+
+.mme-row label {
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+
+.mme-row select {
+    padding: 2px 6px;
+    font-size: 0.85rem;
+}
+
+.mme-check {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-weight: 500;
+}
+
+.apply-btn {
+    padding: 4px 10px;
+    font-size: 0.85rem;
+    cursor: pointer;
+    background: #eef7ff;
+    border: 1px solid #bcd9ff;
+    border-radius: 6px;
+}
+
 
     /* ----- PLANET GRID (7 COLUMNS) ----- */
     .planet-grid {
