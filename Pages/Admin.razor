@@ -86,6 +86,10 @@ else if (!string.IsNullOrEmpty(_error))
 else if (_eventsForDay is null || _eventsForDay.Count == 0)
 {
     <p>No events found for @_selectedDate.ToString("yyyy-MM-dd").</p>
+
+    <button type="button" class="create-month-btn" @onclick="CreateNewMonthTemplate">
+        ➕ Create New Month
+    </button>
 }
 else
 {
@@ -94,10 +98,33 @@ else
         <div class="event-card">
             <h3 class="event-date">@ev.Date.ToString("yyyy-MM-dd")</h3>
 
-            @if (!string.IsNullOrWhiteSpace(ev.EventText))
-            {
-                <div class="event-text">@ev.EventText</div>
+            @{
+                var key = ev.Date.Date;
+                bool editorOpen = _openEventTextEditors.Contains(key);
+                bool hasText = !string.IsNullOrWhiteSpace(ev.EventText);
+                bool noEventChecked = !editorOpen && !hasText; // if empty AND editor not open -> No Event
             }
+
+            <div class="eventtext-box">
+                <div class="eventtext-header">
+                    <h4>Event Text</h4>
+
+                    <label class="noevent-toggle">
+                        <input type="checkbox"
+                               checked="@noEventChecked"
+                               @onchange="(e) => ToggleNoEvent(ev, e)" />
+                        No Text
+                    </label>
+                </div>
+
+                @if (editorOpen || hasText)
+                {
+                    <textarea class="eventtext-editor"
+                              value="@ev.EventText"
+                              @onchange="(e) => SetEventText(ev, e)"
+                              placeholder="Write event text here..."></textarea>
+                }
+            </div>
 
             <div class="moonday-box">
                 <h4>Moon Day</h4>
@@ -208,6 +235,7 @@ else
     private int _moonDayOnFirst = 1;                   // user chooses: MoonDay number for 1st day
     private int _tripleDayOfMonth = 0;                 // 0 = none
     private bool _is29Cycle = false;                   // false=30, true=29
+    private HashSet<DateTime> _openEventTextEditors = new();
 
     private void MarkChanged()
     {
@@ -411,6 +439,129 @@ else
         _changeCount += count;
     }
 
+    // ----- CREATE NEW MONTH ----- //
+    private async Task CreateNewMonthTemplate()
+    {
+        if (Editor.Db?.AstroEventsDB is null)
+        {
+            _error = "Database not loaded.";
+            return;
+        }
+
+        int year = _selectedDate.Year;
+        int month = _selectedDate.Month;
+
+        // Confirm (optional but recommended)
+        var confirm = await JS.InvokeAsync<bool>(
+            "confirm",
+            $"Create missing AstroEvents for {year}-{month:00} with default values?"
+        );
+        if (!confirm) return;
+
+        var db = Editor.Db;
+        int daysInMonth = DateTime.DaysInMonth(year, month);
+
+        // Fast lookup of existing dates in that month
+        var existing = db.AstroEventsDB
+            .Where(e => e.Date.Year == year && e.Date.Month == month)
+            .Select(e => e.Date.Date)
+            .ToHashSet();
+
+        int created = 0;
+
+        for (int day = 1; day <= daysInMonth; day++)
+        {
+            var date = new DateTime(year, month, day);
+
+            if (existing.Contains(date.Date))
+                continue;
+
+            db.AstroEventsDB.Add(CreateDefaultAstroEvent(date));
+            created++;
+        }
+
+        if (created == 0)
+        {
+            _error = $"Month {year}-{month:00} already has all days.";
+            return;
+        }
+
+        // Keep db tidy
+        var sorted = db.AstroEventsDB.OrderBy(e => e.Date).ToList();
+
+        // Rebuild ObservableCollection in-place
+        db.AstroEventsDB.Clear();
+        foreach (var item in sorted)
+            db.AstroEventsDB.Add(item);
+
+        MarkChangedMany(created); // counts as created rows (simple tracking)
+
+        // Reload current day (now it should exist)
+        LoadByDate();
+        StateHasChanged();
+    }
+
+    private AstroEvent CreateDefaultAstroEvent(DateTime date)
+    {
+        // NOTE: pick a safe default sign for required dropdowns.
+        // If your enum starts with Aries, this is fine.
+        var defaultSign = ZodiacSign.Aries;
+
+        return new AstroEvent
+        {
+            Date = date,
+            EventText = "",
+
+            MoonDay = new MoonDay
+            {
+                NewMoonDay = 1,                
+                IsTripleMoonDay = false,
+                TransitionTime = default,
+                MiddleMoonDayTransitionTime = default
+            },
+
+            // Planets: must be non-null, because RenderPlanetEditor expects PlanetInZodiac p (not nullable)
+            SunInZodiac = DefaultPlanet(Planet.Sun, defaultSign),
+            MoonInZodiac = DefaultPlanet(Planet.Moon, defaultSign),
+            MercuryInZodiac = DefaultPlanet(Planet.Mercury, defaultSign),
+            VenusInZodiac = DefaultPlanet(Planet.Venus, defaultSign),
+            MarsInZodiac = DefaultPlanet(Planet.Mars, defaultSign),
+            JupiterInZodiac = DefaultPlanet(Planet.Jupiter, defaultSign),
+            SaturnInZodiac = DefaultPlanet(Planet.Saturn, defaultSign),
+            UranusInZodiac = DefaultPlanet(Planet.Uranus, defaultSign),
+            NeptuneInZodiac = DefaultPlanet(Planet.Neptune, defaultSign),
+            PlutoInZodiac = DefaultPlanet(Planet.Pluto, defaultSign),
+            SelenaInZodiac = DefaultPlanet(Planet.Selena, defaultSign),
+            LilithInZodiac = DefaultPlanet(Planet.Lilith, defaultSign),
+            RahuInZodiac = DefaultPlanet(Planet.Rahu, defaultSign),
+            KetuInZodiac = DefaultPlanet(Planet.Ketu, defaultSign),
+
+            // Activities: set to None (or Neutral if your enum does not have None)
+            ImportantTasks = ActivityQuality.None,
+            Contracts = ActivityQuality.None,
+            Meetings = ActivityQuality.None,
+            Love = ActivityQuality.None,
+            Buystuff = ActivityQuality.None,
+            Beauty = ActivityQuality.None,
+            Barber = ActivityQuality.None,
+            Gardening = ActivityQuality.None,
+            NewIdeas = ActivityQuality.None,
+            Tech = ActivityQuality.None,
+            Travel = ActivityQuality.None
+        };
+    }
+
+    private PlanetInZodiac DefaultPlanet(Planet planet, ZodiacSign sign) =>
+        new PlanetInZodiac
+        {
+            Planet = planet,
+            NewZodiacSign = sign,
+            IsRetrograde = false,
+            IsZodiacTransitioning = false,
+            TransitionTime = default
+        };
+
+
     // ----- SAVING -----
 
     public void Dispose()
@@ -477,6 +628,45 @@ else
     {
         var json = JsonSerializer.Serialize(source);
         return JsonSerializer.Deserialize<T>(json)!;
+    }
+
+    // EventText
+    private void ToggleNoEvent(AstroEvent ev, ChangeEventArgs e)
+    {
+        bool noEvent = e.Value is bool b && b;
+        var key = ev.Date.Date;
+
+        if (noEvent)
+        {
+            // Hide editor + force empty string
+            _openEventTextEditors.Remove(key);
+
+            if (!string.IsNullOrEmpty(ev.EventText))
+            {
+                ev.EventText = "";
+                MarkChanged();
+            }
+        }
+        else
+        {
+            // Show editor even if text is empty
+            _openEventTextEditors.Add(key);
+            StateHasChanged();
+        }
+    }
+
+    private void SetEventText(AstroEvent ev, ChangeEventArgs e)
+    {
+        var newText = e.Value?.ToString() ?? "";
+
+        if (ev.EventText != newText)
+        {
+            ev.EventText = newText;
+            MarkChanged();
+        }
+
+        // If user erased everything, keep editor open (so they can still type)
+        _openEventTextEditors.Add(ev.Date.Date);
     }
 
 
@@ -722,6 +912,48 @@ else
         color: #b00020;
         font-weight: 500;
     }
+
+    /* ----- EVENT TEXT ----- */
+    .eventtext-box {
+        background: #fff7ef;
+        padding: 6px;
+        border-radius: 4px;
+        border: 1px solid #f1d6b8;
+        margin-bottom: 6px;
+    }
+
+    .eventtext-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 4px;
+    }
+
+        .eventtext-header h4 {
+            margin: 0;
+            font-size: 0.9rem;
+        }
+
+    .noevent-toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 0.85rem;
+        user-select: none;
+    }
+
+    .eventtext-editor {
+        width: 100%;
+        min-height: 70px;
+        resize: vertical;
+        font-size: 0.85rem;
+        padding: 6px;
+        border-radius: 4px;
+        border: 1px solid #ccc;
+        outline: none;
+    }
+
 
     /* ----- EVENT CARD ----- */
     .event-card {
